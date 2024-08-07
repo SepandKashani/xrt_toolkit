@@ -1,0 +1,64 @@
+[build-system]
+requires = [
+    "hatchling",
+    "hatch-vcs",
+]
+build-backend = "hatchling.build"
+
+# Metadata ====================================================================
+[project]
+name = "xrt_toolkit"
+dynamic = ["version"]
+description = "Collection of utilities to compute X-Ray Transforms."
+readme = "README.rst"
+requires-python = ">= 3.12, < 3.13"
+license = "MIT"
+authors = [
+    { name = "S. Kashani", email = "sepand@kashani.ch" },
+]
+classifiers = [
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3.12",
+]
+urls.download = "https://github.com/SepandKashani/xrt_toolkit"
+dependencies = [
+    "drjit == 0.4.6",
+    "numpy >= 2.0, < 3",
+    "opt-einsum >= 3.3.0, < 4",
+    "packaging >= 24.1",
+]
+
+# Optional dependencies =======================================================
+[project.optional-dependencies]
+dev = [
+    "hatch >= 1.12, < 2",
+    "ipython >= 8.25, < 9",
+    "matplotlib >= 3.9, < 4",
+    "pre-commit >= 3.7, < 4",
+    "pytest >= 8.2, < 9",
+    "tox >= 4.15, < 5",
+]
+cuda11 = [ "cupy-cuda11x >= 13.0, < 14", ]
+cuda12 = [ "cupy-cuda12x >= 13.0, < 14", ]
+
+
+# Get version info from Git ===================================================
+[tool.hatch.version]
+source = "vcs"
+
+# sdist/wheel config ==========================================================
+[tool.hatch.build]
+exclude = [
+    "/dev",
+    "/dist",
+    "/src/xrt_toolkit_tests",
+]
+include = [
+    "/src",
+]
+packages = [
+    "src/xrt_toolkit",
+]
