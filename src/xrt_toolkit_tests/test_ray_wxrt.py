@@ -4,6 +4,7 @@ import pytest
 import xrt_toolkit.util as xtk_util
 import xrt_toolkit_tests.conftest as ct
 import xrt_toolkit_tests.test_ray_xrt as ct_xrt
+from xrt_toolkit.array_module import CUPY_ENABLED, NDArrayInfo
 from xrt_toolkit.ray_wxrt import RayWXRT
 
 
@@ -43,6 +44,57 @@ class TestRayWXRT(ct_xrt.TestRayXRT):
         b = op.apply(a)
         assert b.shape == b_gt.shape
         assert ct.allclose(b, b_gt, np.single)
+
+    @pytest.mark.parametrize("stack_shape", [(), (1,), (5, 3, 4)])
+    @pytest.mark.parametrize("direction", ["apply", "adjoint"])
+    def test_cupy(
+        self,
+        origin,
+        pitch,
+        N,
+        ntw_spec,
+        dtype,
+        # -----------------------------
+        stack_shape,
+        direction,
+    ):
+        # CuPy backend produces same results as NumPy backend.
+        ndi = NDArrayInfo.CUPY
+        if not CUPY_ENABLED:
+            pytest.skip(f"Unsupported backend {ndi}.")
+        cp = ndi.module()
+
+        op_gt = RayWXRT(
+            origin=origin,
+            pitch=pitch,
+            N=N,
+            n_spec=ntw_spec[0],
+            t_spec=ntw_spec[1],
+            w_spec=ntw_spec[2],
+        )
+        op_cp = RayWXRT(
+            origin=origin,
+            pitch=pitch,
+            N=N,
+            n_spec=cp.asarray(ntw_spec[0]),
+            t_spec=cp.asarray(ntw_spec[1]),
+            w_spec=cp.asarray(ntw_spec[2]),
+        )
+
+        rng = np.random.default_rng()
+        if direction == "apply":
+            a = rng.standard_normal((*stack_shape, *op_gt.cfg.N), dtype=dtype)
+            b_gt = op_gt.apply(a)
+            b_cp = op_cp.apply(cp.asarray(a))
+        else:  # "adjoint"
+            a = rng.standard_normal((*stack_shape, op_gt.cfg.N_ray), dtype)
+            b_gt = op_gt.adjoint(a)
+            b_cp = op_cp.adjoint(cp.asarray(a))
+
+        assert NDArrayInfo.from_obj(b_cp) == ndi
+        assert b_cp.shape == b_gt.shape
+        assert b_cp.dtype == b_gt.dtype
+        assert ct.allclose(b_cp.get(), b_gt, op_gt.fdtype)
 
     # Fixtures ----------------------------------------------------------------
     @pytest.fixture
@@ -87,16 +139,12 @@ class TestRayWXRT(ct_xrt.TestRayXRT):
         return n_spec, t_spec, w_spec
 
     @pytest.fixture
-    def op(self, origin, pitch, N, ntw_spec, ndi) -> RayWXRT:
-        xp = ndi.module()
-        n_spec = xp.asarray(ntw_spec[0])
-        t_spec = xp.asarray(ntw_spec[1])
-        w_spec = xp.asarray(ntw_spec[2])
+    def op(self, origin, pitch, N, ntw_spec) -> RayWXRT:
         return RayWXRT(
             origin=origin,
             pitch=pitch,
             N=N,
-            n_spec=n_spec,
-            t_spec=t_spec,
-            w_spec=w_spec,
+            n_spec=ntw_spec[0],
+            t_spec=ntw_spec[1],
+            w_spec=ntw_spec[2],
         )
