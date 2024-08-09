@@ -61,6 +61,55 @@ class TestRayXRT:
         rhs = ct.inner_product(a, op.adjoint(b), op.cfg.D)
         assert ct.allclose(lhs, rhs, op.fdtype)
 
+    @pytest.mark.parametrize("stack_shape", [(), (1,), (5, 3, 4)])
+    @pytest.mark.parametrize("direction", ["apply", "adjoint"])
+    def test_cupy(
+        self,
+        origin,
+        pitch,
+        N,
+        nt_spec,
+        dtype,
+        # -----------------------------
+        stack_shape,
+        direction,
+    ):
+        # CuPy backend produces same results as NumPy backend.
+        ndi = NDArrayInfo.CUPY
+        if not CUPY_ENABLED:
+            pytest.skip(f"Unsupported backend {ndi}.")
+        cp = ndi.module()
+
+        op_gt = RayXRT(
+            origin=origin,
+            pitch=pitch,
+            N=N,
+            n_spec=nt_spec[0],
+            t_spec=nt_spec[1],
+        )
+        op_cp = RayXRT(
+            origin=origin,
+            pitch=pitch,
+            N=N,
+            n_spec=cp.asarray(nt_spec[0]),
+            t_spec=cp.asarray(nt_spec[1]),
+        )
+
+        rng = np.random.default_rng()
+        if direction == "apply":
+            a = rng.standard_normal((*stack_shape, *op_gt.cfg.N), dtype=dtype)
+            b_gt = op_gt.apply(a)
+            b_cp = op_cp.apply(cp.asarray(a))
+        else:  # "adjoint"
+            a = rng.standard_normal((*stack_shape, op_gt.cfg.N_ray), dtype)
+            b_gt = op_gt.adjoint(a)
+            b_cp = op_cp.adjoint(cp.asarray(a))
+
+        assert NDArrayInfo.from_obj(b_cp) == ndi
+        assert b_cp.shape == b_gt.shape
+        assert b_cp.dtype == b_gt.dtype
+        assert ct.allclose(b_cp.get(), b_gt, op_gt.fdtype)
+
     # Fixtures ----------------------------------------------------------------
     @pytest.fixture(params=[2, 3])
     def space_dim(self, request) -> int:
@@ -132,30 +181,12 @@ class TestRayXRT:
         # Correctness tests are performed in single-precision due to drjit constraints.
         return np.dtype(request.param)
 
-    @pytest.fixture(
-        params=[
-            NDArrayInfo.NUMPY,
-            NDArrayInfo.CUPY,
-        ]
-    )
-    def ndi(self, request) -> NDArrayInfo:
-        # Array backend to test.
-        # CuPy backend only tested if machine supports it.
-        _ndi = request.param
-        if _ndi == NDArrayInfo.CUPY:
-            if not CUPY_ENABLED:
-                pytest.skip(f"Unsupported backend {_ndi}.")
-        return _ndi
-
     @pytest.fixture
-    def op(self, origin, pitch, N, nt_spec, ndi) -> RayXRT:
-        xp = ndi.module()
-        n_spec = xp.asarray(nt_spec[0])
-        t_spec = xp.asarray(nt_spec[1])
+    def op(self, origin, pitch, N, nt_spec) -> RayXRT:
         return RayXRT(
             origin=origin,
             pitch=pitch,
             N=N,
-            n_spec=n_spec,
-            t_spec=t_spec,
+            n_spec=nt_spec[0],
+            t_spec=nt_spec[1],
         )

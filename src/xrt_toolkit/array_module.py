@@ -98,3 +98,42 @@ def to_NUMPY(x: npt.ArrayLike) -> np.ndarray:
         msg = f"Dev-action required: define behaviour for {ndi}."
         raise ValueError(msg)
     return y
+
+
+def _cp_vectorize(
+    func: callable,
+    dim_shape: tuple[int],
+    codim_shape: tuple[int],
+    out_dtype: np.dtype,
+) -> callable:
+    # Vectorize a cupy function func(*args) where args[0] contains batch dimensions.
+    #
+    # This is a small hack to enable batch processing until cupy.vectorize() supports the `signature` parameter.
+    #
+    # Parameters
+    #   dim_shape: tuple[int]
+    #     (N1,...,ND) shape of core input dimensions.
+    #   codim_shape: tuple[int]
+    #     (M1,...,MK) shape of core output dimensions.
+    #   out_dtype: dtype
+    #     dtype of the output array.
+    # Returns
+    #   vfunc: callable
+    #     the vectorized function
+
+    def wrapper(*args):
+        x = args[0]
+
+        ndi = NDArrayInfo.from_obj(x)
+        assert ndi == NDArrayInfo.CUPY
+        xp = ndi.module()
+
+        dim_rank = len(dim_shape)
+        sh_stack = x.shape[:-dim_rank]
+        y = xp.zeros((*sh_stack, *codim_shape), dtype=out_dtype)
+        for idx in xp.ndindex(sh_stack):
+            y[idx] = func(x[idx], *args[1:])
+
+        return y
+
+    return wrapper

@@ -6,7 +6,7 @@ import numpy.typing as npt
 
 import xrt_toolkit.drjit as xtk_drjit
 import xrt_toolkit.util as xtk_util
-from xrt_toolkit.array_module import NDArrayInfo, to_NUMPY
+from xrt_toolkit.array_module import NDArrayInfo, _cp_vectorize, to_NUMPY
 
 __all__ = [
     "RayXRT",
@@ -140,20 +140,36 @@ class RayXRT:
         self.lipschitz = max_cell_weight * np.sqrt(N_ray * np.linalg.norm(N))
 
         # Vectorize apply/adjoint calls
-        sig_a = "(" + ",".join([f"n{d}" for d in range(self.cfg.D)]) + ")"
-        sig_b = "(" + "p" + ")"
-        sig_fw = f"{sig_a}->{sig_b}"
-        sig_bw = f"{sig_b}->{sig_a}"
-        self.apply = xp.vectorize(
-            self.apply,
-            otypes=[self.fdtype],
-            signature=sig_fw,
-        )
-        self.adjoint = xp.vectorize(
-            self.adjoint,
-            otypes=[self.fdtype],
-            signature=sig_bw,
-        )
+        if ndi_n == NDArrayInfo.NUMPY:
+            sig_a = "(" + ",".join([f"n{d}" for d in range(self.cfg.D)]) + ")"
+            sig_b = "(" + "p" + ")"
+            sig_fw = f"{sig_a}->{sig_b}"
+            sig_bw = f"{sig_b}->{sig_a}"
+            self.apply = xp.vectorize(
+                self.apply,
+                otypes=[self.fdtype],
+                signature=sig_fw,
+            )
+            self.adjoint = xp.vectorize(
+                self.adjoint,
+                otypes=[self.fdtype],
+                signature=sig_bw,
+            )
+        elif ndi_n == NDArrayInfo.CUPY:
+            # [2024.08.09] cp.vectorize() currently does not support the `signature` parameter
+            # -> use custom vectorize() for now.
+            self.apply = _cp_vectorize(
+                self.apply,
+                dim_shape=self.cfg.N,
+                codim_shape=(self.cfg.N_ray,),
+                out_dtype=self.fdtype,
+            )
+            self.adjoint = _cp_vectorize(
+                self.adjoint,
+                dim_shape=(self.cfg.N_ray,),
+                codim_shape=self.cfg.N,
+                out_dtype=self.fdtype,
+            )
 
     def apply(self, a: npt.ArrayLike) -> npt.ArrayLike:
         r"""
