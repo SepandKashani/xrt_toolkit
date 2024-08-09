@@ -14,6 +14,12 @@ Installation
 
 .. code-block:: bash
 
-   pip install git+https://github.com/SepandKashani/xrt_toolkit          # CPU-only
-   pip install git+https://github.com/SepandKashani/xrt_toolkit[cuda11]  # CPU + CUDA 11
-   pip install git+https://github.com/SepandKashani/xrt_toolkit[cuda12]  # CPU + CUDA 12
+   # user install
+   pip install xrt_toolkit@git+https://github.com/SepandKashani/xrt_toolkit.git          # CPU-only
+   pip install xrt_toolkit[cuda11]@git+https://github.com/SepandKashani/xrt_toolkit.git  # CPU + CUDA 11
+   pip install xrt_toolkit[cuda12]@git+https://github.com/SepandKashani/xrt_toolkit.git  # CPU + CUDA 12
+
+   # developer install
+   git clone https://github.com/SepandKashani/xrt_toolkit.git
+   cd xrt_toolkit/
+   pip install -e ".[dev]"  # add cuda[11,12] targets too if needed
