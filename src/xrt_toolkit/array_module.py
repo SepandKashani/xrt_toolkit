@@ -2,11 +2,13 @@ import enum
 import importlib.util
 import types
 
-import numpy
+import numpy as np
+import numpy.typing as npt
 
 __all__ = [
     "CUPY_ENABLED",
     "NDArrayInfo",
+    "to_NUMPY",
 ]
 
 
@@ -30,15 +32,10 @@ class NDArrayInfo(enum.Enum):
     NUMPY = enum.auto()
     CUPY = enum.auto()
 
-    @classmethod
-    def default(cls) -> "NDArrayInfo":
-        """Default array backend to use."""
-        return cls.NUMPY
-
     def type(self) -> type:
         """Array type associated to a backend."""
         if self.name == "NUMPY":
-            return numpy.ndarray
+            return np.ndarray
         elif self.name == "CUPY":
             return cupy.ndarray if CUPY_ENABLED else type(None)
         else:
@@ -66,9 +63,38 @@ class NDArrayInfo(enum.Enum):
         Python module associated to an array backend.
         """
         if self.name == "NUMPY":
-            xp = numpy
+            xp = np
         elif self.name == "CUPY":
             xp = cupy if CUPY_ENABLED else None
         else:
             raise ValueError(f"No known module(s) for {self.name}.")
         return xp
+
+
+def to_NUMPY(x: npt.ArrayLike) -> np.ndarray:
+    """
+    Convert an array from a specific backend to NUMPY.
+
+    Parameters
+    ----------
+    x: NDArray
+        Array to be converted.
+
+    Returns
+    -------
+    y: NDArray
+        Array with NumPy backend.
+
+    Notes
+    -----
+    This function is a no-op if the array is already a NumPy array.
+    """
+    ndi = NDArrayInfo.from_obj(x)
+    if ndi == NDArrayInfo.NUMPY:
+        y = x
+    elif ndi == NDArrayInfo.CUPY:
+        y = x.get()
+    else:
+        msg = f"Dev-action required: define behaviour for {ndi}."
+        raise ValueError(msg)
+    return y
