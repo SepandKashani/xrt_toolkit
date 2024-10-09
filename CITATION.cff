@@ -1,0 +1,13 @@
+abstract: "XRT Toolkit (XTK) is a collection of utilities to compute X-Ray Transforms."
+authors:
+  - family-names: Kashani
+    given-names: Sepand
+    orcid: "https://orcid.org/0000-0002-0735-371X"
+cff-version: 1.2.0
+keywords:
+  - X-Ray Transform
+  - Tomography
+license: MIT
+message: "If you use this software, please cite it using these metadata."
+repository-code: "https://github.com/SepandKashani/xrt_toolkit"
+title: "XRT Toolkit"
