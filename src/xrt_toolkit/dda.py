@@ -1,14 +1,16 @@
-import drjit as dr
-from typing import Callable, TypeVar, Literal, Union, Any, Tuple, Optional
+from typing import Any, Callable, Literal, Optional, Tuple, TypeVar, Union
 
-ArrayNfT  = TypeVar("ArrayNfT", bound=dr.AnyArray)
-ArrayNuT  = TypeVar("ArrayNuT", bound=dr.AnyArray)
-ArrayNiT  = TypeVar("ArrayNiT", bound=dr.AnyArray)
-BoolT     = TypeVar("BoolT", bound=Union[dr.ArrayBase, bool])
-FloatT    = TypeVar("FloatT", bound=dr.AnyArray)
-BoolT     = TypeVar("BoolT", bound=dr.AnyArray)
+import drjit as dr
+
+ArrayNfT = TypeVar("ArrayNfT", bound=dr.AnyArray)
+ArrayNuT = TypeVar("ArrayNuT", bound=dr.AnyArray)
+ArrayNiT = TypeVar("ArrayNiT", bound=dr.AnyArray)
+BoolT = TypeVar("BoolT", bound=Union[dr.ArrayBase, bool])
+FloatT = TypeVar("FloatT", bound=dr.AnyArray)
+BoolT = TypeVar("BoolT", bound=dr.AnyArray)
 TensorXfT = TypeVar("TensorXfT", bound=dr.AnyArray)
-StateT    = TypeVar("StateT")
+StateT = TypeVar("StateT")
+
 
 def dda(
     ray_o: ArrayNfT,
@@ -17,11 +19,14 @@ def dda(
     grid_res: ArrayNuT,
     grid_min: ArrayNfT,
     grid_max: ArrayNfT,
-    func: Callable[[StateT, ArrayNuT, ArrayNfT, ArrayNfT, BoolT], Tuple[StateT, BoolT]],
+    func: Callable[
+        [StateT, ArrayNuT, ArrayNfT, ArrayNfT, BoolT],
+        Tuple[StateT, BoolT],
+    ],
     state: StateT,
     active: BoolT,
     mode: Literal["scalar", "symbolic", "evaluated", None] = None,
-    max_iterations: Optional[int] = None
+    max_iterations: Optional[int] = None,
 ) -> StateT:
     r"""
     N-dimensional digital differential analyzer (DDA).
@@ -177,7 +182,7 @@ def dda(
     t_max = dr.minimum(dr.min(t_max_v2), ray_max)
 
     # Only run the DDA algorithm if the interval is nonempty
-    active = active & (t_max > t_min) & dr.isfinite(t_max) # type: ignore
+    active = active & (t_max > t_min) & dr.isfinite(t_max)  # type: ignore
 
     # Deactivate rays that have zero direction along any axis
     # and whose origin along that axis is outside the grid bounds
@@ -185,7 +190,7 @@ def dda(
 
     # Advance the ray to the start of the interval
     ray_o = dr.fma(ray_d, t_min, ray_o)
-    t_min, t_max = 0, t_max - t_min # type: ignore
+    t_min, t_max = 0, t_max - t_min  # type: ignore
 
     # Compute the integer step direction
     step = ArrayNi(dr.select(ray_d >= 0, 1, -1))
@@ -202,7 +207,12 @@ def dda(
     dt_v[inf_t] = dr.inf
 
     def body_fn(
-        active: BoolT, state: StateT, dt_v: ArrayNfT, p0: ArrayNfT, pi: ArrayNiT, t_rem: Any,
+        active: BoolT,
+        state: StateT,
+        dt_v: ArrayNfT,
+        p0: ArrayNfT,
+        pi: ArrayNiT,
+        t_rem: Any,
     ) -> Tuple[BoolT, StateT, ArrayNfT, ArrayNfT, ArrayNiT, Any]:
         # Select the smallest step. It's possible that dt == 0 when starting
         # directly on a grid line.
@@ -213,8 +223,7 @@ def dda(
         p1 = dr.fma(ray_d, dt, p0)
 
         # Invoke the user-provided callback
-        state, cont = func(state, ArrayNu(pi),
-                           p0, p1, active & (dt > 0)) # type: ignore
+        state, cont = func(state, ArrayNu(pi), p0, p1, active & (dt > 0))  # type: ignore
 
         # Advance
         dt_v = dr.select(mask, abs_rcp_d, dt_v - dt)
@@ -232,5 +241,5 @@ def dda(
         cond=lambda *args: args[0],
         mode=mode,
         labels=("active", "state", "dt_v", "p1", "pi", "t_rem"),
-        max_iterations=max_iterations
+        max_iterations=max_iterations,
     )[1]
