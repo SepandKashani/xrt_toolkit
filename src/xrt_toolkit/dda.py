@@ -133,14 +133,8 @@ def dda(
 
     .. note::
 
-       Just like the Dr.Jit texture interface, the implementation uses the
-       convention that voxel sizes and positions are specified from last to
-       first component (e.g. ``(Z, Y, X)``), while regular 3D positions use the
-       opposite ``(X, Y, Z)`` order.
-
-       In particular, all ``ArrayNuT``-typed parameters of the function and the
-       callback use the ZYX convention, while ``ArrayNfT``-typed parameters use
-       the ``XYZ`` convention.
+       Unlike Dr.Jit's built-in :py:func:`drjit.dda.dda`, all coordinates are
+       provided in ``(X, Y, Z)`` order.
     """
 
     ArrayNf = type(ray_o)
@@ -155,9 +149,6 @@ def dda(
     assert type(grid_min) is ArrayNf
     assert type(grid_max) is ArrayNf
     assert type(active) is Bool
-
-    # Switch axis convention
-    grid_res = ArrayNu(reversed(grid_res))
 
     # Linear map to grid coordinates (likely optimized away if
     # 'grid_*' are literal constants)
@@ -222,7 +213,7 @@ def dda(
         p1 = dr.fma(ray_d, dt, p0)
 
         # Invoke the user-provided callback
-        state, cont = func(state, ArrayNu(reversed(pi)),
+        state, cont = func(state, ArrayNu(pi),
                            p0, p1, active & (dt > 0)) # type: ignore
 
         # Advance
