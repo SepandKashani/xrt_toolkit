@@ -1,15 +1,16 @@
-from typing import Any, Callable, Literal, Optional, Tuple, TypeVar, Union
+import collections.abc as cabc
+import typing as typ
 
 import drjit as dr
 
-ArrayNfT = TypeVar("ArrayNfT", bound=dr.AnyArray)
-ArrayNuT = TypeVar("ArrayNuT", bound=dr.AnyArray)
-ArrayNiT = TypeVar("ArrayNiT", bound=dr.AnyArray)
-BoolT = TypeVar("BoolT", bound=Union[dr.ArrayBase, bool])
-FloatT = TypeVar("FloatT", bound=dr.AnyArray)
-BoolT = TypeVar("BoolT", bound=dr.AnyArray)
-TensorXfT = TypeVar("TensorXfT", bound=dr.AnyArray)
-StateT = TypeVar("StateT")
+ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
+ArrayNuT = typ.TypeVar("ArrayNuT", bound=dr.AnyArray)
+ArrayNiT = typ.TypeVar("ArrayNiT", bound=dr.AnyArray)
+BoolT = typ.TypeVar("BoolT", bound=dr.ArrayBase | bool)
+FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
+BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
+TensorXfT = typ.TypeVar("TensorXfT", bound=dr.AnyArray)
+StateT = typ.TypeVar("StateT")
 
 
 def dda(
@@ -19,14 +20,14 @@ def dda(
     grid_res: ArrayNuT,
     grid_min: ArrayNfT,
     grid_max: ArrayNfT,
-    func: Callable[
+    func: cabc.Callable[
         [StateT, ArrayNuT, ArrayNfT, ArrayNfT, BoolT],
-        Tuple[StateT, BoolT],
+        tuple[StateT, BoolT],
     ],
     state: StateT,
     active: BoolT,
-    mode: Literal["scalar", "symbolic", "evaluated", None] = None,
-    max_iterations: Optional[int] = None,
+    mode: typ.Literal["scalar", "symbolic", "evaluated", None] = None,
+    max_iterations: typ.Optional[int] = None,
 ) -> StateT:
     r"""
     N-dimensional digital differential analyzer (DDA).
@@ -222,8 +223,8 @@ def dda(
         dt_v: ArrayNfT,
         p0: ArrayNfT,
         pi: ArrayNiT,
-        t_rem: Any,
-    ) -> Tuple[BoolT, StateT, ArrayNfT, ArrayNfT, ArrayNiT, Any]:
+        t_rem: typ.Any,
+    ) -> tuple[BoolT, StateT, ArrayNfT, ArrayNfT, ArrayNiT, typ.Any]:
         # Select the smallest step. It's possible that dt == 0 when starting
         # directly on a grid line.
         dt = dr.minimum(dr.min(dt_v), t_rem)
