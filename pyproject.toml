@@ -11,7 +11,7 @@ name = "xrt_toolkit"
 dynamic = ["version"]
 description = "Collection of utilities to compute X-Ray Transforms."
 readme = "README.rst"
-requires-python = ">= 3.12, < 3.13"
+requires-python = ">= 3.10, < 3.14"
 license = "MIT"
 authors = [
     { name = "S. Kashani", email = "sepand@kashani.ch" },
@@ -21,29 +21,37 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 urls.download = "https://github.com/SepandKashani/xrt_toolkit"
 dependencies = [
-    "drjit == 0.4.6",
-    "numpy >= 2.0, < 3",
-    "opt-einsum >= 3.3.0, < 4",
-    "packaging >= 24.1",
+    "drjit >= 1.0, < 2",
+    "numpy >= 1.25, < 3",
+    "packaging >= 24.2",
 ]
 
 # Optional dependencies =======================================================
 [project.optional-dependencies]
-dev = [
-    "hatch >= 1.12, < 2",
-    "ipython >= 8.25, < 9",
-    "matplotlib >= 3.9, < 4",
-    "pre-commit >= 3.7, < 4",
-    "pytest >= 8.2, < 9",
-    "tox >= 4.15, < 5",
+viz = [
+    "matplotlib >= 3.10, < 4",
 ]
-cuda11 = [ "cupy-cuda11x >= 13.0, < 14", ]
-cuda12 = [ "cupy-cuda12x >= 13.0, < 14", ]
-
+gpu = [
+    "cupy-cuda12x >= 13.0, < 14",
+]
+dev = [
+    "hatch >= 1.14, < 2",
+    "opt-einsum >= 3.3.0, < 4",
+    "pre-commit >= 4.1, < 5",
+    "pytest >= 8.3, < 9",
+    "ruff >= 0.9, < 1",  # keep synced with .pre-commit-config.yaml
+    "tox >= 4.24, < 5",
+]
+all = [
+    "xrt_toolkit[viz,gpu]",
+]
 
 # Get version info from Git ===================================================
 [tool.hatch.version]
@@ -53,7 +61,7 @@ source = "vcs"
 [tool.hatch.build]
 exclude = [
     "/dev",
-    "/dist",
+    "/doc",
     "/src/xrt_toolkit_tests",
 ]
 include = [
@@ -62,3 +70,14 @@ include = [
 packages = [
     "src/xrt_toolkit",
 ]
+
+# Ruff config =================================================================
+[tool.ruff]
+fix = true  # auto fixing
+exclude = ["src/**/__init__.py"]
+
+[tool.ruff.lint]
+select = ["I"]  # import sorting
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
