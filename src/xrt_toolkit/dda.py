@@ -32,7 +32,7 @@ def dda(
     N-dimensional digital differential analyzer (DDA).
 
     This function traverses the intersection of a Cartesian coordinate grid and
-    a specified ray or ray segment. The following snippet shows how to use it
+    a specified ray or ray segment.  The following snippet shows how to use it
     to enumerate the intersection of a grid with a single ray.
 
     .. code-block:: python
@@ -43,19 +43,19 @@ def dda(
                    pt_in: Array3f, pt_out: Array3f,
                    active: Bool) -> tuple[list, bool]:
            # Entered a grid cell, stash it in the 'state' variable
-           state.append(Array3f(index))
+           state.append(index)
            return state, Bool(True)
 
        result = dda(
-            ray_o = Array3f(-.1),
-            ray_d = Array3f(.1, .2, .3),
-            ray_max = Float(float('inf')),
+            ray_o    = Array3f(-.1),
+            ray_d    = Array3f(.1, .2, .3),
+            ray_max  = Float(float('inf')),
             grid_res = Array3u(10),
             grid_min = Array3f(0),
             grid_max = Array3f(1),
-            func = dda_fun,
-            state = [],
-            active = Bool(True)
+            func     = dda_fun,
+            state    = [],
+            active   = Bool(True)
        )
 
        print(result)
@@ -66,75 +66,85 @@ def dda(
 
     The function takes the following arguments. Note that many of them are
     generic `type variables
-    <https://mypy.readthedocs.io/en/stable/generics.html>`__ (signaled by
-    ending with a capital ``T``). To support different dimensions and
-    precisions, the implementation must be able to deal with various input
-    types, which is communicated by these type variables.
+    <https://mypy.readthedocs.io/en/stable/generics.html>`__ (signaled by ending
+    with a capital ``T``). To support different dimensions and precisions, the
+    implementation must be able to deal with various input types, which is
+    communicated by these type variables.
 
-    Args:
-        ray_o (ArrayNfT): the ray origin, where the ``ArrayNfT`` type variable
-          refers to an n-dimensional scalar or Jit-compiled floating point array.
+    Parameters
+    ----------
+    ray_o: ArrayNfT
+        Ray origin, where the ``ArrayNfT`` type variable refers to an
+        n-dimensional scalar or Jit-compiled floating point array.
 
-        ray_d (ArrayNfT): the ray direction. Does not need to be normalized.
+    ray_d: ArrayNfT
+        Ray direction. Does not need to be normalized.
 
-        ray_max (object): the maximum extent along the ray, which is permitted
-          to be infinite. The value is specfied as a multiple of the norm of
-          ``ray_d``, which is not necessarily unit-length. Must be of type
-          :py:func:`dr.value_t(ArrayNfT) <drjit.value_t>`.
+    ray_max: object
+        Maximum extent along the ray, which is permitted to be infinite. The
+        value is specfied as a multiple of the norm of ``ray_d``, which is not
+        necessarily unit-length. Must be of type :py:func:`dr.value_t(ArrayNfT)
+        <drjit.value_t>`.
 
-        grid_res (ArrayNuT): the grid resolution, where the ``ArrayNuT`` type
-          variable refers to a matched 32-bit integer array (i.e.,
-          :py:func:`ArrayNuT = dr.int32_array_t(ArrayNfT) <drjit.int32_array_t>`).
+    grid_res: ArrayNuT
+        Grid resolution, where the ``ArrayNuT`` type variable refers to a
+        matched 32-bit unsigned integer array (i.e., :py:func:`ArrayNuT =
+        dr.uint32_array_t(ArrayNfT) <drjit.uint32_array_t>`).
 
-        grid_min (ArrayNfT): the minimum position of the grid bounds.
+    grid_min: ArrayNfT
+        Bottom-left corner of the grid bounding box.
 
-        grid_max (ArrayNfT): the maximum position of the grid bounds.
+    grid_max: ArrayNfT
+        Upper-right corner of the grid bounding box.
 
-        func (Callable[[StateT, ArrayNuT, ArrayNfT, ArrayNfT, BoolT], tuple[StateT, BoolT]]):
-          a callback that will be invoked when the DDA traverses a grid cell. It must
-          take the following five positional arguments:
+    func: Callable[[StateT, ArrayNuT, ArrayNfT, ArrayNfT, BoolT], tuple[StateT, BoolT]]
+        Callback invoked when the DDA traverses a grid cell. It must take the
+        following five positional arguments:
 
-          1. ``arg0: StateT``: An arbitrary state value.
+        1. ``arg0: StateT``: Arbitrary state value.
 
-          2. ``arg1: ArrayNuT``: An integer array specifying the cell index
-             along each dimension.
+        2. ``arg1: ArrayNuT``: Integer array specifying the cell index along
+           each dimension.
 
-          3. ``arg2: ArrayNfT``: The fractional position (:math:`\in [0, 1]^n`)
-             where the ray *enters* the current cell.
+        3. ``arg2: ArrayNfT``: Fractional position (:math:`\in [0, 1]^n`) where
+           the ray *enters* the current cell.
 
-          4. ``arg3: ArrayNfT``: The fractional position (:math:`\in [0, 1]^n`)
-             where the ray *leaves* the current cell.
+        4. ``arg3: ArrayNfT``: Fractional position (:math:`\in [0, 1]^n`) where
+           the ray *leaves* the current cell.
 
-          5. ``arg4: BoolT``: A boolean array specifying which elements are
-             active.
+        5. ``arg4: BoolT``: Boolean array specifying which elements are active.
 
-          The callback should then return a tuple of type ``tuple[StateT,
-          BoolT]`` containing
+        The callback should then return a tuple of type ``tuple[StateT, BoolT]``
+        containing
 
-          1. An updated state value.
+        1. An updated state value.
 
-          2. A boolean array that can be used to exit the loop prematurely for
-             some or all rays. The iteration stops if the associated entry of
-             the return value equals ``False``.
+        2. A boolean array that can be used to exit the loop prematurely for
+           some or all rays. The iteration stops if the associated entry of the
+           return value equals ``False``.
 
-        state (StateT): an arbitrary *initial* state that will be passed
-          to the callback.
+    state: StateT
+        Arbitrary *initial* state that will be passed to the callback.
 
-        active (BoolT): an array specifying which elements of the input are
-          active, where the ``BoolT`` type variable refers to a matched
-          boolean array (i.e., :py:func:`BoolT = dr.mask_t(ray_o.x) <drjit.mask_t>`).
+    active: BoolT
+        Array specifying which elements of the input are active, where the
+        ``BoolT`` type variable refers to a matched boolean array (i.e.,
+        :py:func:`BoolT = dr.mask_t(ray_o.x) <drjit.mask_t>`).
 
-        mode: (str | None): The operation can operate in scalar, symbolic, or
-          evaluated modes---see the ``mode`` argument and the documentation of
-          :py:func:`drjit.while_loop` for details.
+    mode: str | None
+        The operation can operate in scalar, symbolic, or evaluated modes ---
+        see the ``mode`` argument and the documentation of
+        :py:func:`drjit.while_loop` for details.
 
-        max_iterations: int | None: Bound on the iteration count that is needed
-          for reverse-mode differentiation. Forwarded to the ``max_iterations``
-          parameter of :py:func:`drjit.while_loop`.
+    max_iterations: int | None
+        Bound on the iteration count that is needed for reverse-mode
+        differentiation. Forwarded to the ``max_iterations`` parameter of
+        :py:func:`drjit.while_loop`.
 
-    Returns:
-        StateT: The function returns the final state value of the callback upon
-        termination.
+    Returns
+    -------
+    StateT
+        Final state value of the callback upon termination.
 
     .. note::
 
