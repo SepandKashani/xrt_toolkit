@@ -163,3 +163,129 @@ def _order_0_project(
     accum += L * f_q
 
     return (source, stride, pitch, accum), Bool(True)
+
+
+def xrt_adjoint(
+    ray_spec: RaySpecT,
+    knot_spec: xrtu.UniformSpec,
+    order: int,
+    data: FloatT,
+    buffer: TensorXfT = None,
+) -> TensorXfT:
+    r"""
+    Compute 2D/3D back-projections.
+
+    Adjoint of ``xrt_apply()``: maps projection weights to volume expansion coefficients.
+
+    Parameters
+    ----------
+    ray_spec: tuple[ArrayNfT, ArrayNfT]
+        (L,) ray anchors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}`.
+    knot_spec: UniformSpec
+        Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
+    order: 0 | 1
+        Data interpolation order.
+
+        This parameter sets which :math:`\psi` is used to interpolate data values.
+    data: FloatT
+        (L,) projections :math:`g_{l} \in \bR`.
+    buffer: TensorXfT
+        (Q1,...,QD) buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
+
+    Returns
+    -------
+    b_proj: TensorXfT
+        (Q1,...,QD) back-projected weights :math:`f_{\bbq} \in \bR`.
+    """
+    ray_t, ray_d = ray_spec
+
+    ArrayNf = type(ray_t)
+    ArrayNu = dr.uint32_array_t(ArrayNf)
+    Float = dr.value_t(ArrayNf)
+
+    # type checking ---------------------------------------
+    D = dr.size_v(ArrayNf)
+    assert (ray_t.ndim == 2) and (D in (2, 3))
+    assert type(ray_d) is ArrayNf
+
+    assert knot_spec.ndim == D
+    assert order in (0, 1)
+
+    L = max(ray_t.shape[1], ray_d.shape[1])
+    assert type(data) is Float
+    assert len(data) == L
+
+    if buffer is None:
+        TensorXf = dr.tensor_t(Float)
+        buffer = dr.zeros(TensorXf, shape=knot_spec.num)
+    else:
+        assert dr.is_tensor_v(buffer) and (type(buffer.array) is Float)
+        assert buffer.shape == knot_spec.num
+    # -----------------------------------------------------
+
+    knot_start = ArrayNf(*knot_spec.start)
+    knot_step = ArrayNf(*knot_spec.step)
+    knot_num = ArrayNu(*knot_spec.num)
+    bbox_ll = knot_start - (knot_step / 2)
+    bbox_ur = knot_start - (knot_step / 2) + (knot_num * knot_step)
+    if D == 2:
+        stride = ArrayNu(1, knot_num.x)
+    elif D == 3:
+        stride = ArrayNu(1, knot_num.x, knot_num.x * knot_num.y)
+
+    if order == 0:
+        state = (data, stride, knot_step, buffer.array)
+        func = _order_0_backproject
+    elif order == 1:
+        if D == 2:
+            raise NotImplementedError  # todo
+        elif D == 3:
+            raise NotImplementedError  # todo
+
+    # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
+    # -> rewind `ray_t` for it to lie outside the bbox boundary.
+    active, t1, t2 = xrtu.ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_d)
+    t_min = dr.minimum(t1, t2)
+    ray_t = dr.select(
+        active & xrtu.bbox_contains(bbox_ll, bbox_ur, ray_t),
+        ray_t + (t_min - 1) * ray_d,  # go a bit further to be truly outside bbox
+        ray_t,
+    )
+
+    state = dda(
+        ray_o=ray_t,
+        ray_d=ray_d,
+        ray_max=Float(dr.inf),
+        grid_res=knot_num,
+        grid_min=bbox_ll,
+        grid_max=bbox_ur,
+        func=func,
+        state=state,
+        active=active,
+        mode="symbolic",
+        max_iterations=-1,
+    )
+
+    return buffer
+
+
+def _order_0_backproject(
+    state: tuple[FloatT, ArrayNuT, ArrayNfT, FloatT],
+    index: ArrayNuT,
+    p_a: ArrayNfT,
+    p_b: ArrayNfT,
+    active: BoolT,
+) -> tuple[tuple[FloatT, ArrayNuT, ArrayNfT, FloatT], BoolT]:
+    """
+    Compute analytic ray/cell back-projection.
+    """
+    Float = type(p_a.x)
+    Bool = dr.mask_t(Float)
+
+    source, stride, pitch, accum = state
+
+    offset = index @ stride
+    L = dr.norm((p_b - p_a) * pitch)
+    dr.scatter_add(accum, L * source, offset, active)
+
+    return (source, stride, pitch, accum), Bool(True)
