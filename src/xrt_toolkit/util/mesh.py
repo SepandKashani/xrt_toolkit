@@ -1,3 +1,4 @@
+import collections.abc as cabc
 from dataclasses import dataclass
 
 from .misc import broadcast_seq
@@ -54,3 +55,7 @@ class UniformSpec:
     def ndim(self) -> int:
         D = len(self.start)
         return D
+
+    def __iter__(self) -> cabc.Iterator:
+        for d in range(self.ndim):
+            yield (self.start[d], self.step[d], self.num[d])
