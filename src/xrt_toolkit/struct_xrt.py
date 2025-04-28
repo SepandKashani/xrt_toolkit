@@ -119,7 +119,9 @@ def xrt_struct_apply(
         assert len(buffer) == L
     # -----------------------------------------------------
 
-    u = [start + step * dr.arange(Float, num) for (start, step, num) in ray_u_spec]
+    u = [None] * D
+    for d, (start, step, num) in enumerate(ray_u_spec):
+        u[d] = start + step * dr.arange(Float, num)
     uu = ArrayNf(*dr.meshgrid(*u, indexing="ij"))
 
     i = UInt(0)
