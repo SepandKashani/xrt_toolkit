@@ -1,3 +1,4 @@
+import math
 import typing as typ
 
 import drjit as dr
@@ -10,7 +11,6 @@ BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
 ArrayNuT = typ.TypeVar("ArrayNuT", bound=dr.AnyArray)
 FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
-TensorXfT = typ.TypeVar("TensorXfT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
 
 
@@ -18,7 +18,7 @@ def xrt_apply(
     ray_spec: RaySpecT,
     knot_spec: xrtu.UniformSpec,
     order: int,
-    data: TensorXfT,
+    data: FloatT,
     buffer: FloatT = None,
 ) -> FloatT:
     r"""
@@ -61,8 +61,8 @@ def xrt_apply(
         Data interpolation order.
 
         This parameter sets which :math:`\psi` is used to interpolate data values.
-    data: TensorXfT
-        (Q1,...,QD) volume weights :math:`f_{\bbq} \in \bR`.
+    data: FloatT
+        (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
 
@@ -85,8 +85,8 @@ def xrt_apply(
     assert knot_spec.ndim == D
     assert order in (0, 1)
 
-    assert dr.is_tensor_v(data) and (type(data.array) is Float)
-    assert data.shape == knot_spec.num
+    assert type(data) is Float
+    assert len(data) == math.prod(knot_spec.num)
 
     L = max(ray_t.shape[1], ray_d.shape[1])
     if buffer is None:
@@ -107,7 +107,7 @@ def xrt_apply(
         stride = ArrayNu(1, knot_num.x, knot_num.x * knot_num.y)
 
     if order == 0:
-        state = (data.array, stride, knot_step, buffer)
+        state = (data, stride, knot_step, buffer)
         func = _order_0_project
     elif order == 1:
         if D == 2:
@@ -170,8 +170,8 @@ def xrt_adjoint(
     knot_spec: xrtu.UniformSpec,
     order: int,
     data: FloatT,
-    buffer: TensorXfT = None,
-) -> TensorXfT:
+    buffer: FloatT = None,
+) -> FloatT:
     r"""
     Compute 2D/3D back-projections.
 
@@ -189,13 +189,13 @@ def xrt_adjoint(
         This parameter sets which :math:`\psi` is used to interpolate data values.
     data: FloatT
         (L,) projections :math:`g_{l} \in \bR`.
-    buffer: TensorXfT
-        (Q1,...,QD) buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
+    buffer: FloatT
+        (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
 
     Returns
     -------
-    b_proj: TensorXfT
-        (Q1,...,QD) back-projected weights :math:`f_{\bbq} \in \bR`.
+    b_proj: FloatT
+        (Q1,...,QD) flattened C-ordered back-projected weights :math:`f_{\bbq} \in \bR`.
     """
     ray_t, ray_d = ray_spec
 
@@ -216,11 +216,10 @@ def xrt_adjoint(
     assert len(data) == L
 
     if buffer is None:
-        TensorXf = dr.tensor_t(Float)
-        buffer = dr.zeros(TensorXf, shape=knot_spec.num)
+        buffer = dr.zeros(Float, math.prod(knot_spec.num))
     else:
-        assert dr.is_tensor_v(buffer) and (type(buffer.array) is Float)
-        assert buffer.shape == knot_spec.num
+        assert type(buffer) is Float
+        assert len(buffer) == math.prod(knot_spec.num)
     # -----------------------------------------------------
 
     knot_start = ArrayNf(*knot_spec.start)
@@ -234,7 +233,7 @@ def xrt_adjoint(
         stride = ArrayNu(1, knot_num.x, knot_num.x * knot_num.y)
 
     if order == 0:
-        state = (data, stride, knot_step, buffer.array)
+        state = (data, stride, knot_step, buffer)
         func = _order_0_backproject
     elif order == 1:
         if D == 2:
