@@ -7,3 +7,6 @@ from .misc import (
 from .mesh import (
     UniformSpec as UniformSpec,
 )
+from .compat import (
+    NDArrayInfo as NDArrayInfo,
+)
