@@ -2,6 +2,7 @@ import enum
 import importlib.util
 import types
 
+import drjit as dr
 import numpy as np
 import numpy.typing as npt
 
@@ -62,3 +63,41 @@ class NDArrayInfo(enum.Enum):
         else:
             raise ValueError(f"No known module(s) for {self.name}.")
         return xp
+
+
+def xp2dr(x: npt.NDArray, dr_type: str) -> dr.AnyArray:
+    """
+    Convert a NumPy/CuPy array to a DrJit array.
+
+    Parameters
+    ----------
+    x: NDArray
+        NumPy/CuPy array of shape (N,), (N, D) or (N, D, D).
+
+        In DrJit terminology, the leading dimension is assumed to be dynamic-length.
+    dr_type: str
+        Basename of the DrJit type to convert to. (Ex: Float, Array3f, Array22f)
+
+    Returns
+    -------
+    y: AnyArray
+        DrJit array of type `dr_type`.
+    """
+    ndi = NDArrayInfo.from_obj(x)
+    if ndi == NDArrayInfo.NUMPY:
+        drb = importlib.import_module("drjit.llvm")
+    elif ndi == NDArrayInfo.CUPY:
+        drb = importlib.import_module("drjit.cuda")
+    else:
+        raise ValueError
+
+    dr_klass = getattr(drb, dr_type)
+    if x.ndim == 1:
+        y = dr_klass(x)
+    elif x.ndim == 2:
+        y = dr_klass(*x.T)
+    elif x.ndim == 3:
+        assert x.shape[1] == x.shape[2]
+        y = dr_klass(*x.transpose(1, 2, 0))
+
+    return y

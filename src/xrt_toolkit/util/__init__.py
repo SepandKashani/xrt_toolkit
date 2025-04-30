@@ -9,4 +9,5 @@ from .mesh import (
 )
 from .compat import (
     NDArrayInfo as NDArrayInfo,
+    xp2dr as xp2dr,
 )
