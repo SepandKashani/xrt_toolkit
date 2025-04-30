@@ -5,6 +5,9 @@ from .bbox import (
 from .dda import (
     dda as dda,
 )
+from .diagnostics import (
+    diagnostic_plot as diagnostic_plot,
+)
 from .ray_xrt import (
     xrt_adjoint as xrt_adjoint,
     xrt_apply as xrt_apply,
