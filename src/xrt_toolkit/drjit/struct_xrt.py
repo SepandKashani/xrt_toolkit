@@ -59,8 +59,8 @@ def xrt_struct_apply(
 
         * ray_t_spec: ArrayNNfT
           (N_proj, D, D) homogeneous transforms :math:`\bbH_{t} = [\bbA_{t} \in \bR^{D \times (D-1)}, \bbb_{t} \in \bR^{D}]`.
-        * ray_d_spec: ArrayNNfT
-          (N_proj, D, D) homogeneous transforms :math:`\bbH_{d} = [\bbA_{d} \in \bR^{D \times (D-1)}, \bbb_{d} \in \bR^{D}]`.
+        * ray_n_spec: ArrayNNfT
+          (N_proj, D, D) homogeneous transforms :math:`\bbH_{n} = [\bbA_{n} \in \bR^{D \times (D-1)}, \bbb_{n} \in \bR^{D}]`.
         * ray_u_spec: UniformSpec
           D-dim uniform mesh.
 
@@ -70,7 +70,7 @@ def xrt_struct_apply(
         .. math::
 
            \bbt(\bbu) = \bbH_{t} \bbu,
-           \bbd(\bbu) = \bbH_{d} \bbu.
+           \bbd(\bbu) = \bbH_{n} \bbu.
 
         `ray_spec` encodes ``L = N_proj * prod(ray_u_spec.num)`` projections.
     knot_spec: UniformSpec
@@ -90,7 +90,7 @@ def xrt_struct_apply(
     proj: FloatT
         (L,) projections :math:`\xrt[f] \in \bR`.
     """
-    ray_t_spec, ray_d_spec, ray_u_spec = ray_spec
+    ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
 
     ArrayNNf = type(ray_t_spec)
     ArrayNf = dr.value_t(ArrayNNf)
@@ -100,7 +100,7 @@ def xrt_struct_apply(
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
     assert (ray_t_spec.ndim == 3) and (D in (2, 3))
-    assert type(ray_d_spec) is ArrayNNf
+    assert type(ray_n_spec) is ArrayNNf
     assert ray_u_spec.ndim == D
 
     assert knot_spec.ndim == D
@@ -109,7 +109,7 @@ def xrt_struct_apply(
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
 
-    assert (N_proj := ray_t_spec.shape[-1]) == ray_d_spec.shape[-1]
+    assert (N_proj := ray_t_spec.shape[-1]) == ray_n_spec.shape[-1]
     L_proj = math.prod(ray_u_spec.num)
     L = N_proj * L_proj
     if buffer is None:
@@ -130,11 +130,11 @@ def xrt_struct_apply(
         H_t = dr.gather(ArrayNNf, ray_t_spec, i)
         ray_t = H_t @ uu
 
-        H_d = dr.gather(ArrayNNf, ray_d_spec, i)
-        ray_d = H_d @ uu
+        H_n = dr.gather(ArrayNNf, ray_n_spec, i)
+        ray_n = H_n @ uu
 
         proj = xrt_apply(
-            ray_spec=(ray_t, ray_d),
+            ray_spec=(ray_t, ray_n),
             knot_spec=knot_spec,
             order=order,
             data=data,
@@ -169,8 +169,8 @@ def xrt_struct_adjoint(
 
         * ray_t_spec: ArrayNNfT
           (N_proj, D, D) homogeneous transforms :math:`\bbH_{t} = [\bbA_{t} \in \bR^{D \times (D-1)}, \bbb_{t} \in \bR^{D}]`.
-        * ray_d_spec: ArrayNNfT
-          (N_proj, D, D) homogeneous transforms :math:`\bbH_{d} = [\bbA_{d} \in \bR^{D \times (D-1)}, \bbb_{d} \in \bR^{D}]`.
+        * ray_n_spec: ArrayNNfT
+          (N_proj, D, D) homogeneous transforms :math:`\bbH_{n} = [\bbA_{d} \in \bR^{D \times (D-1)}, \bbb_{d} \in \bR^{D}]`.
         * ray_u_spec: UniformSpec
           D-dim uniform mesh.
 
@@ -180,7 +180,7 @@ def xrt_struct_adjoint(
         .. math::
 
            \bbt(\bbu) = \bbH_{t} \bbu,
-           \bbd(\bbu) = \bbH_{d} \bbu.
+           \bbd(\bbu) = \bbH_{n} \bbu.
 
         `ray_spec` encodes ``L = N_proj * prod(ray_u_spec.num)`` projections.
     knot_spec: UniformSpec
@@ -200,7 +200,7 @@ def xrt_struct_adjoint(
     b_proj: FloatT
         (Q1,...,QD) flattened C-ordered back-projected weights :math:`f_{\bbq} \in \bR`.
     """
-    ray_t_spec, ray_d_spec, ray_u_spec = ray_spec
+    ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
 
     ArrayNNf = type(ray_t_spec)
     ArrayNf = dr.value_t(ArrayNNf)
@@ -210,13 +210,13 @@ def xrt_struct_adjoint(
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
     assert (ray_t_spec.ndim == 3) and (D in (2, 3))
-    assert type(ray_d_spec) is ArrayNNf
+    assert type(ray_n_spec) is ArrayNNf
     assert ray_u_spec.ndim == D
 
     assert knot_spec.ndim == D
     assert order in (0, 1)
 
-    assert (N_proj := ray_t_spec.shape[-1]) == ray_d_spec.shape[-1]
+    assert (N_proj := ray_t_spec.shape[-1]) == ray_n_spec.shape[-1]
     L_proj = math.prod(ray_u_spec.num)
     L = N_proj * L_proj
     assert type(data) is Float
@@ -240,12 +240,12 @@ def xrt_struct_adjoint(
         H_t = dr.gather(ArrayNNf, ray_t_spec, i)
         ray_t = H_t @ uu
 
-        H_d = dr.gather(ArrayNNf, ray_d_spec, i)
-        ray_d = H_d @ uu
+        H_n = dr.gather(ArrayNNf, ray_n_spec, i)
+        ray_n = H_n @ uu
 
         proj = dr.gather(Float, data, index)
         xrt_adjoint(
-            ray_spec=(ray_t, ray_d),
+            ray_spec=(ray_t, ray_n),
             knot_spec=knot_spec,
             order=order,
             data=proj,

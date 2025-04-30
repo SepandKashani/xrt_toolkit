@@ -7,7 +7,3 @@ from .misc import (
 from .mesh import (
     UniformSpec as UniformSpec,
 )
-from .bbox import (
-    bbox_contains as bbox_contains,
-    ray_bbox_intersect as ray_bbox_intersect,
-)

@@ -5,6 +5,7 @@ import drjit as dr
 
 import xrt_toolkit.util as xrtu
 
+from .bbox import bbox_contains, ray_bbox_intersect
 from .dda import dda
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
@@ -71,7 +72,7 @@ def xrt_apply(
     proj: FloatT
         (L,) projections :math:`\xrt[f] \in \bR`.
     """
-    ray_t, ray_d = ray_spec
+    ray_t, ray_n = ray_spec
 
     ArrayNf = type(ray_t)
     ArrayNu = dr.uint32_array_t(ArrayNf)
@@ -80,7 +81,7 @@ def xrt_apply(
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
     assert (ray_t.ndim == 2) and (D in (2, 3))
-    assert type(ray_d) is ArrayNf
+    assert type(ray_n) is ArrayNf
 
     assert knot_spec.ndim == D
     assert order in (0, 1)
@@ -88,7 +89,7 @@ def xrt_apply(
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
 
-    L = max(ray_t.shape[1], ray_d.shape[1])
+    L = max(ray_t.shape[1], ray_n.shape[1])
     if buffer is None:
         buffer = dr.zeros(Float, L)
     else:
@@ -117,17 +118,17 @@ def xrt_apply(
 
     # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
     # -> rewind `ray_t` for it to lie outside the bbox boundary.
-    active, t1, t2 = xrtu.ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_d)
+    active, t1, t2 = ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_n)
     t_min = dr.minimum(t1, t2)
     ray_t = dr.select(
-        active & xrtu.bbox_contains(bbox_ll, bbox_ur, ray_t),
-        ray_t + (t_min - 1) * ray_d,  # go a bit further to be truly outside bbox
+        active & bbox_contains(bbox_ll, bbox_ur, ray_t),
+        ray_t + (t_min - 1) * ray_n,  # go a bit further to be truly outside bbox
         ray_t,
     )
 
     state = dda(
         ray_o=ray_t,
-        ray_d=ray_d,
+        ray_d=ray_n,
         ray_max=Float(dr.inf),
         grid_res=knot_num,
         grid_min=bbox_ll,
@@ -197,7 +198,7 @@ def xrt_adjoint(
     b_proj: FloatT
         (Q1,...,QD) flattened C-ordered back-projected weights :math:`f_{\bbq} \in \bR`.
     """
-    ray_t, ray_d = ray_spec
+    ray_t, ray_n = ray_spec
 
     ArrayNf = type(ray_t)
     ArrayNu = dr.uint32_array_t(ArrayNf)
@@ -206,12 +207,12 @@ def xrt_adjoint(
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
     assert (ray_t.ndim == 2) and (D in (2, 3))
-    assert type(ray_d) is ArrayNf
+    assert type(ray_n) is ArrayNf
 
     assert knot_spec.ndim == D
     assert order in (0, 1)
 
-    L = max(ray_t.shape[1], ray_d.shape[1])
+    L = max(ray_t.shape[1], ray_n.shape[1])
     assert type(data) is Float
     assert len(data) == L
 
@@ -243,17 +244,17 @@ def xrt_adjoint(
 
     # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
     # -> rewind `ray_t` for it to lie outside the bbox boundary.
-    active, t1, t2 = xrtu.ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_d)
+    active, t1, t2 = ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_n)
     t_min = dr.minimum(t1, t2)
     ray_t = dr.select(
-        active & xrtu.bbox_contains(bbox_ll, bbox_ur, ray_t),
-        ray_t + (t_min - 1) * ray_d,  # go a bit further to be truly outside bbox
+        active & bbox_contains(bbox_ll, bbox_ur, ray_t),
+        ray_t + (t_min - 1) * ray_n,  # go a bit further to be truly outside bbox
         ray_t,
     )
 
     state = dda(
         ray_o=ray_t,
-        ray_d=ray_d,
+        ray_d=ray_n,
         ray_max=Float(dr.inf),
         grid_res=knot_num,
         grid_min=bbox_ll,
