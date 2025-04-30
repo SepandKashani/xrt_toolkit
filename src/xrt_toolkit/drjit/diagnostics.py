@@ -1,4 +1,5 @@
 import importlib
+import math
 import typing as typ
 
 import drjit as dr
@@ -8,12 +9,14 @@ import xrt_toolkit.util as xrtu
 
 from .bbox import ray_bbox_intersect
 
+ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
+StructRaySpecT = tuple[ArrayNNfT, ArrayNNfT, xrtu.UniformSpec]
 
 
 def diagnostic_plot(
-    ray_spec: RaySpecT,
+    ray_spec: RaySpecT | StructRaySpecT,
     knot_spec: xrtu.UniformSpec,
     show_grid: bool = False,
 ):
@@ -22,8 +25,15 @@ def diagnostic_plot(
 
     Parameters
     ----------
-    ray_spec: tuple[ArrayNfT, ArrayNfT]
+    ray_spec: tuple[ArrayNfT, ArrayNfT] | tuple[ArrayNNfT, ArrayNNfT, UniformSpec]
         (L,) ray anchors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}`.
+
+        There are two methods to specify ray parameters (\bbt, \bbn):
+
+        * Explicit, as in ``xrt_apply()``,
+        * Implicit, as in ``xrt_struct_apply()``.
+
+        Refer to their docstrings for details.
     knot_spec: UniformSpec
         Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
     show_grid: bool
@@ -38,17 +48,55 @@ def diagnostic_plot(
     -----
     Rays which do not intersect the volume are **not** shown.
     """
-    ray_t, ray_n = ray_spec
-
-    ArrayNf = type(ray_t)
-    ArrayNu = dr.uint32_array_t(ArrayNf)
-    Float = dr.value_t(ArrayNf)
-
     # type checking ---------------------------------------
-    D = dr.size_v(ArrayNf)
-    assert (ray_t.ndim == 2) and (D in (2, 3))
-    assert type(ray_n) is ArrayNf
+    if len(ray_spec) == 2:
+        ray_t, ray_n = ray_spec
 
+        ArrayNf = type(ray_t)
+        ArrayNu = dr.uint32_array_t(ArrayNf)
+        Float = dr.value_t(ArrayNf)
+
+        D = dr.size_v(ArrayNf)
+        assert (ray_t.ndim == 2) and (D in (2, 3))
+        assert type(ray_n) is ArrayNf
+    elif len(ray_spec) == 3:
+        ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
+
+        ArrayNNf = type(ray_t_spec)
+        ArrayNf = dr.value_t(ArrayNNf)
+        ArrayNu = dr.uint32_array_t(ArrayNf)
+        Float = dr.value_t(ArrayNf)
+        UInt = dr.value_t(dr.uint32_array_t(ArrayNf))
+
+        D = dr.size_v(ArrayNf)
+        assert (ray_t_spec.ndim == 3) and (D in (2, 3))
+        assert type(ray_n_spec) is ArrayNNf
+        assert ray_u_spec.ndim == D
+
+        assert (N_proj := ray_t_spec.shape[-1]) == ray_n_spec.shape[-1]
+
+        # implicit-ray -> explicit-ray conversion
+        L_proj = math.prod(ray_u_spec.num)
+        L = N_proj * L_proj
+        u = [None] * D
+        for d, (start, step, num) in enumerate(ray_u_spec):
+            u[d] = start + step * dr.arange(Float, num)
+        uu = ArrayNf(*dr.meshgrid(*u, indexing="ij"))
+
+        ray_t = dr.zeros(ArrayNf, L)
+        ray_n = dr.zeros(ArrayNf, L)
+        index = dr.arange(UInt, 0, L_proj)
+        for i in range(N_proj):
+            # for-loop not ideal for tracing time, but doesn't matter for plotting
+            H_t = dr.gather(ArrayNNf, ray_t_spec, i)
+            dr.scatter(ray_t, H_t @ uu, index)
+
+            H_n = dr.gather(ArrayNNf, ray_n_spec, i)
+            dr.scatter(ray_n, H_n @ uu, index)
+
+            index += L_proj
+    else:
+        raise ValueError("Unknown `ray_spec`")
     assert knot_spec.ndim == D
     # -----------------------------------------------------
 
