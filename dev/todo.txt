@@ -1,0 +1,32 @@
++ Add DR test suite
+
++ Add NumPy, CuPy, PyTorch, JAX interface
+
++ Test NP/CP/PT/JAX interfaces.
+  For PT/JAX: verify auto-diff registration
+
++ [drjit.ray_xrt.py] Implement order-1/2 methods (2D)
+  - _order_[12]_project()
+  - _order_[12]_backproject()
+
+  Changes to xrt_[apply,adjoint]() should be limited to setting the right state variables.
+  Integrate B-spline and box-spline variants.
+
++ [drjit.ray_xrt.py] Implement order-1/2 methods (3D)
+  - _order_[12]_project()
+  - _order_[12]_backproject()
+
+  Changes to xrt_[apply,adjoint]() should be limited to setting the right state variables.
+  Integrate B-spline and box-spline variants.
+
++ Add helpers to setup parallel/fan/cone beam setups.
+
++ RX-solutions: XML ingestor
+  - standard XML format
+  - advanced XML format
+
++ Implement FBP/FDK, with choice of filters.
+  Supported scan geometries: PBCT, FBCT, CBCT
+  Only support xrt_struct-format, hence non-uniform angles ok?
+
++ Add interpolation module to compute knot \conv B/box-spline output on uniform mesh.
