@@ -14,17 +14,14 @@ Installation
 
 .. code-block:: bash
 
-   # user install (CPU-only)
+   # user install
    pip install xrt_toolkit@git+https://github.com/SepandKashani/xrt_toolkit.git
 
-   # user install (CPU/GPU)
-   pip install xrt_toolkit[gpu]@git+https://github.com/SepandKashani/xrt_toolkit.git
-
-   # user install (CPU/GPU, with visualization tools)
-   pip install xrt_toolkit[all]@git+https://github.com/SepandKashani/xrt_toolkit.git
+   # with GUI diagnostic tools
+   pip install xrt_toolkit[viz]@git+https://github.com/SepandKashani/xrt_toolkit.git
 
    # developer install
    git clone https://github.com/SepandKashani/xrt_toolkit.git
    cd xrt_toolkit/
-   pip install -e ".[all,dev]"
+   pip install -e ".[all]"
    pre-commit install
