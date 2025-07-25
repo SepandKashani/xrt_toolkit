@@ -8,6 +8,5 @@ from .mesh import (
     UniformSpec as UniformSpec,
 )
 from .compat import (
-    NDArrayInfo as NDArrayInfo,
-    xp2dr as xp2dr,
+    asarray as asarray,
 )

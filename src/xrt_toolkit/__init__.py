@@ -15,5 +15,5 @@ from .drjit.struct_xrt import (
 )
 from .util import (
     UniformSpec as UniformSpec,
-    xp2dr as xp2dr,
+    asarray as asarray,
 )
