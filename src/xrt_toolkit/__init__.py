@@ -3,7 +3,7 @@ import importlib.metadata
 __version__ = importlib.metadata.version("xrt_toolkit")
 
 from .drjit.diagnostics import (
-    diagnostic_plot as diagnostic_plot,
+    plot_rays as plot_rays,
 )
 from .drjit.ray_xrt import (
     xrt_adjoint as xrt_adjoint,

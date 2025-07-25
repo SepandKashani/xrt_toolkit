@@ -5,23 +5,22 @@ import typing as typ
 import drjit as dr
 import numpy as np
 
-import xrt_toolkit.util as xrtu
-
+from ..util import UniformSpec
 from .bbox import ray_bbox_intersect
 
 ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
-StructRaySpecT = tuple[ArrayNNfT, ArrayNNfT, xrtu.UniformSpec]
+StructRaySpecT = tuple[ArrayNNfT, ArrayNNfT, UniformSpec]
 
 
-def diagnostic_plot(
+def plot_rays(
     ray_spec: RaySpecT | StructRaySpecT,
-    knot_spec: xrtu.UniformSpec,
+    knot_spec: UniformSpec,
     show_grid: bool = False,
 ):
     r"""
-    Plot ray trajectories.
+    Plot ray trajectories inside a volume.
 
     Parameters
     ----------
@@ -37,7 +36,7 @@ def diagnostic_plot(
     knot_spec: UniformSpec
         Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
     show_grid: bool
-        If true, overlay the pixel grid.
+        If true, overlay the neighborhood grid.
 
     Returns
     -------
@@ -209,10 +208,12 @@ def diagnostic_plot(
 
         pad_width = 0.1 * bbox_dim  # 10% axial pad
         _ax.set_xlim(
-            _bbox_ll[0] - pad_width[0], _bbox_ll[0] + bbox_dim[0] + pad_width[0]
+            _bbox_ll[0] - pad_width[0],
+            _bbox_ll[0] + bbox_dim[0] + pad_width[0],
         )
         _ax.set_ylim(
-            _bbox_ll[1] - pad_width[1], _bbox_ll[1] + bbox_dim[1] + pad_width[1]
+            _bbox_ll[1] - pad_width[1],
+            _bbox_ll[1] + bbox_dim[1] + pad_width[1],
         )
         _ax.legend(loc="lower right", bbox_to_anchor=(1, 1))
         _ax.set_aspect(1)
