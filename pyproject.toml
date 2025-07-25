@@ -28,6 +28,7 @@ classifiers = [
 ]
 urls.download = "https://github.com/SepandKashani/xrt_toolkit"
 dependencies = [
+    "array-api-compat",
     "drjit >= 1.0, < 2",
     "numpy >= 1.25, < 3",
     "packaging >= 24.2",
