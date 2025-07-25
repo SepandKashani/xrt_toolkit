@@ -26,7 +26,7 @@ class TranslateDType:
     def __init__(self, dtype: np.dtype):
         dtype = np.dtype(dtype)
         assert dtype in self.map_to_float
-        self._fdtype = self.map_to_float[dtype]
+        self._fdtype = self.map_to_float[dtype]  # canonical internal representation
 
     def to_int(self) -> np.dtype:
         return self.map_from_float[(self._fdtype, "i")]
