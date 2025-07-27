@@ -7,6 +7,7 @@ import numpy as np
 
 from ..util import UniformSpec
 from .bbox import ray_bbox_intersect
+from .box_spline import box_spline_1d_np
 
 ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -224,6 +225,160 @@ def plot_rays(
                 linestyle="--",
                 color="gray",
             )
+
+    fig.tight_layout()
+    return fig
+
+
+def plot_2d_basis(
+    knot_spec: UniformSpec,
+    order: int,
+    ray_n: ArrayNfT,
+):
+    r"""
+    Visualize basis function :math:`\psi: \bR^{2} \to \bR`.
+
+    Shows side-by-side:
+    - a portion of the neighborhood grid with the support of :math:`\psi` overlayed.
+    - 1d projections of :math:`\psi` at projection directions `ray_n`.
+
+    Parameters
+    ----------
+    knot_spec: UniformSpec
+        Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
+    order: 0 | 1 | 2
+        Data interpolation order.
+
+        This parameter sets which :math:`\psi` is used to interpolate data values.
+    ray_n: ArrayNfT
+        (L,) projection directions :math:`\bbn \in \bR^{2}`.
+
+    Returns
+    -------
+    fig: :py:class:`~matplotlib.figure.Figure`
+        Diagnostic plot.
+    """
+    # type checking ---------------------------------------
+    D = knot_spec.ndim
+    assert D == 2
+
+    assert order in (0, 1, 2)
+
+    ArrayNf = type(ray_n)
+    assert (ray_n.ndim == 2) and (dr.size_v(ArrayNf) == D)
+    # -----------------------------------------------------
+
+    # setup figure ----------------------------------------
+    try:
+        plt = importlib.import_module("matplotlib.pyplot")
+        collections = importlib.import_module("matplotlib.collections")
+        patches = importlib.import_module("matplotlib.patches")
+        sps = importlib.import_module("scipy.spatial")
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("`matplotlib` missing: `pip install matplotlib`")
+
+    fig, ax = plt.subplots(ncols=2)
+    # -----------------------------------------------------
+
+    # helper variables ------------------------------------
+    knot_start = np.array(knot_spec.start)
+    knot_step = np.array(knot_spec.step)
+    ray_n = ray_n.numpy().T  # (L, 2)
+    ray_n = ray_n / np.linalg.norm(ray_n, axis=1, keepdims=True)
+
+    # draw knot_ll ----------------------------------------
+    ax[0].scatter(
+        knot_start[0],
+        knot_start[1],
+        color="k",
+        label="knot_start",
+        marker="+",
+    )
+
+    # draw neighborhood bbox ------------------------------
+    if order == 0:
+        N_neighbor = 1
+    elif order in (1, 2):
+        N_neighbor = 2
+    bbox_ll = knot_start - (knot_step / 2) - N_neighbor * knot_step
+    bbox_ur = knot_start + (knot_step / 2) + N_neighbor * knot_step
+    bbox_dim = bbox_ur - bbox_ll
+    rect = patches.Rectangle(
+        xy=bbox_ll,
+        width=bbox_dim[0],
+        height=bbox_dim[1],
+        facecolor="none",
+        edgecolor="k",
+    )
+    ax[0].add_patch(rect)
+
+    # draw grid -------------------------------------------
+    x_ticks = bbox_ll[0] + knot_step[0] * np.arange(N_neighbor + 3)
+    y_ticks = bbox_ll[1] + knot_step[1] * np.arange(N_neighbor + 3)
+    x_labels = ("",) * len(x_ticks)
+    y_labels = ("",) * len(y_ticks)
+    ax[0].set_xticks(x_ticks, x_labels)
+    ax[0].set_yticks(y_ticks, y_labels)
+    ax[0].set_xlabel("x")
+    ax[0].set_ylabel("y")
+
+    pad_width = 0.1 * bbox_dim  # 10% axial pad
+    ax[0].set_xlim(
+        bbox_ll[0] - pad_width[0],
+        bbox_ll[0] + bbox_dim[0] + pad_width[0],
+    )
+    ax[0].set_ylim(
+        bbox_ll[1] - pad_width[1],
+        bbox_ll[1] + bbox_dim[1] + pad_width[1],
+    )
+    ax[0].set_aspect(1)
+    ax[0].grid(
+        linestyle="--",
+        color="gray",
+    )
+
+    # draw psi support ------------------------------------
+    E_2D = (  # (2, order+2) 2D box-spline directions
+        knot_step[:, np.newaxis]
+        * np.array(
+            [
+                [1, 0, 1, 1],
+                [0, 1, 1, -1],
+            ]
+        )[:, : (order + 2)]
+    )
+
+    mesh = np.stack(  # (order+2, Nx, Ny)
+        # we do [-0.5, 0.5] instead of [0, 1] to be symmetric around central point
+        np.meshgrid(*(np.linspace(-0.5, 0.5, 5),) * (order + 2)),
+        axis=0,
+    )
+    vertices = np.tensordot(mesh, E_2D, axes=[[0], [1]])  # (Nx, Ny, 2)
+    vertices = knot_start + vertices.reshape(-1, 2)  # (Nx*Ny, 2)
+
+    hull = sps.ConvexHull(vertices)
+    ax[0].fill(
+        vertices[hull.vertices, 0],
+        vertices[hull.vertices, 1],
+        alpha=0.4,
+        color="r",
+        label=r"$\psi$ support",
+    )
+
+    # draw projections ------------------------------------
+    Un_perp = ray_n[:, ::-1] * np.r_[-1, 1]  # (L, 2)
+    E_1D = abs(Un_perp @ E_2D)  # (L, order+2) 1D box-spline directions
+
+    proj_dim = np.linalg.norm((2 * N_neighbor + 1) * knot_step)
+    N_offset = 1_001
+    x = np.linspace(-proj_dim / 2, proj_dim / 2, N_offset)
+    for _e, _n in zip(E_1D, ray_n):
+        y = box_spline_1d_np(_e, x)  # (N_offset,)
+        ax[1].plot(x, y, label=r"$\hat{\mathbf{n}} = $" + f"{np.around(_n, 1)}")
+
+    # misc ------------------------------------------------
+    ax[0].legend(loc="lower left", bbox_to_anchor=(0, 1))
+    ax[1].legend(loc="lower left", bbox_to_anchor=(0, 1))
 
     fig.tight_layout()
     return fig
