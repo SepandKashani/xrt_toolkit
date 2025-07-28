@@ -42,9 +42,9 @@ def xrt_apply(
        \bbx_{q} = \bbx_{0} + \bbq \odot \bbDelta,
            \bbx_{0} \in \bR^{D},
            \bbDelta \in \bR_{+}^{D},
-       \psi(\bbx) = either
-           \prod_{d=1}^{D}                                     1_[-\bbDelta_{d} / 2, \bbDelta_{d} / 2](\bbx_{d}),
-           \prod_{d=1}^{D} (1 - \abs{\bbx_{d} / \bbDelta_{d}}) 1_[-\bbDelta_{d}    , \bbDelta_{d}    ](\bbx_{d}).
+       \psi(\bbx; \bbE \in \bR^{D \times N}) =
+           box-spline with direction vectors
+           \{ \bbe_{l} \in \bR^{D} \}_{l=1..N}
 
     Then ``xrt_apply()`` computes samples of
 
@@ -58,10 +58,33 @@ def xrt_apply(
         (L,) ray anchors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}`.
     knot_spec: UniformSpec
         Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
-    order: 0 | 1
+    order: 0 | 1 | 2
         Data interpolation order.
 
-        This parameter sets which :math:`\psi` is used to interpolate data values.
+        This parameter sets which :math:`\psi` is used to interpolate data values:
+
+        * order = 0 (2D, 3D):
+
+          .. math::
+
+             \bbE = \diag(\bbDelta)
+
+        * order = 1 (2D):
+
+          .. math::
+
+             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}
+                               0  \bbDelta_{2} \bbDelta_{2}]
+
+        * order = 2 (2D):
+
+          .. math::
+
+             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}  \bbDelta_{1}
+                               0  \bbDelta_{2} \bbDelta_{2} -\bbDelta_{2}]
+
+        The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
+
     data: FloatT
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
@@ -184,10 +207,11 @@ def xrt_adjoint(
         (L,) ray anchors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}`.
     knot_spec: UniformSpec
         Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
-    order: 0 | 1
+    order: 0 | 1 | 2
         Data interpolation order.
 
         This parameter sets which :math:`\psi` is used to interpolate data values.
+        The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
     data: FloatT
         (L,) projections :math:`g_{l} \in \bR`.
     buffer: FloatT

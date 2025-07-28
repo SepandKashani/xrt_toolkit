@@ -12,11 +12,26 @@ BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 
 
 def box_spline_1d_np(
-    E: np.ndarray,  # (NE,)
-    x: np.ndarray,  # (Nx,)
-) -> np.ndarray:  # (Nx,)
-    assert E.shape == (E.size,)  # (NE,)
-    assert x.shape == (x.size,)  # (Nx,)
+    E: np.ndarray,
+    x: np.ndarray,
+) -> np.ndarray:
+    r"""
+    NumPy implementation to compute 1D box-splines :math:`\psi(x; \bbE \in \bR^{N})`.
+
+    Parameters
+    ----------
+    E: NDArray
+        (N,) box-spline directions :math:`\bbE`, assumed non-negative.
+    x: NDArray
+        (Q,) evaluation points :math:`x \in \bR`.
+
+    Returns
+    -------
+    y: NDArray
+        (Q,) box-spline values :math:`\psi(x; \bbE)`.
+    """
+    assert E.shape == (E.size,)
+    assert x.shape == (x.size,)
 
     def factorial(n: int) -> int:
         assert n >= 0
@@ -69,18 +84,40 @@ def box_spline_1d_np(
     return y
 
 
-# DrJit-style (uses masking)
 def box_spline_1d_dr(
     E: ArrayNfT,
     E_mask: ArrayNiT,
     x: FloatT,
 ) -> FloatT:
+    r"""
+    DrJit implementation to compute 1D box-splines :math:`\psi(x; \bbE \in \bR^{N})`.
+
+    Parameters
+    ----------
+    E: ArrayNfT
+        (N,) box-spline directions :math:`\bbE`, assumed non-negative.
+    E_mask: ArrayNiT
+        (N,) mask with non-zero entries in :math:`\bbE`. (Integer-valued, not binary.)
+    x: FloatT
+        Evaluation points :math:`x \in \bR`.
+
+    Returns
+    -------
+    y: FloatT
+        Box-spline values :math:`\psi(x; \bbE)`.
+
+    Notes
+    -----
+    This implementation follows closely that of ``box_spline_1d_np()``.
+    """
+
     ArrayNf = type(E)
     ArrayNi = dr.int_array_t(ArrayNf)
     Float = dr.value_t(ArrayNf)
     Int = dr.value_t(ArrayNi)
 
     # type checking ---------------------------------------
+    assert type(E_mask) is ArrayNi
     assert type(x) is Float
     # -----------------------------------------------------
 
