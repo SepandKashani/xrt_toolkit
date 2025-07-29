@@ -8,23 +8,28 @@ import array_api_compat
 import drjit as dr
 
 
-def asarray(x, dr_type: str) -> dr.AnyArray:
+def asarray(x) -> dr.AnyArray:
     """
     Convert Array-API-compatible array to a DrJit array.
 
     Parameters
     ----------
     x: NDArray
-        Array of shape (N,), (N, D) or (N, D, D).
+        float[32,64] array of shape (N,), (N, D) or (N, D, D).
 
         In DrJit terminology, the leading dimension `N` is assumed to be dynamic-length.
-    dr_type: str
-        Basename of the DrJit type to convert to. (Ex: Float, Array3f, Array22f)
 
     Returns
     -------
     y: AnyArray
-        DrJit array of type `dr_type`.
+        DrJit array of type:
+        - (N,) -> Float{precision}
+        - (N, D) -> ArrayDf{precision}
+        - (N, D, D) -> ArrayDDf{precision}
+
+    Notes
+    -----
+    The conversion is typically zero-copy via DLpack when possible.
     """
     # Load correct DRJIT backend: LLVM or CUDA
     #
@@ -35,19 +40,32 @@ def asarray(x, dr_type: str) -> dr.AnyArray:
         drb = importlib.import_module("drjit.llvm")
     elif int(dev_type) == 2:  # CUDA
         drb = importlib.import_module("drjit.cuda")
-    dr_klass = getattr(drb, dr_type)
+
+    # Determine correct DRJIT type
+    xp = array_api_compat.array_namespace(x)
+    finfo = xp.finfo(x.dtype)
+    assert finfo.bits in (32, 64)
+
+    assert x.ndim in (1, 2, 3)
+    suffix = "" if (finfo.bits == 32) else "64"
+    if x.ndim == 1:
+        type_t = f"Float{suffix}"
+    elif x.ndim == 2:
+        D = x.shape[1]
+        type_t = f"Array{D}f{suffix}"
+    elif x.ndim == 3:
+        D = x.shape[1]
+        assert x.shape[2] == D
+        type_t = f"Array{D}{D}f{suffix}"
+    type_t = getattr(drb, type_t)
 
     # Zero-copy instantiation of DRJIT array
-    xp = array_api_compat.array_namespace(x)
     if x.ndim == 1:
         _x = x
     elif x.ndim == 2:
         _x = xp.permute_dims(x, (1, 0))
     elif x.ndim == 3:
-        assert x.shape[1] == x.shape[2]
         _x = xp.permute_dims(x, (1, 2, 0))
-    else:
-        raise ValueError("Unsupported input.")
-    y = dr_klass(_x)
+    y = type_t(_x)
 
     return y
