@@ -183,7 +183,7 @@ def _order_0_project(
 
     offset = index @ stride
     f_q = dr.gather(Float, source, offset, active)
-    L = dr.norm((p_b - p_a) * pitch)
+    L = dr.norm((p_b - p_a) * pitch) * dr.rcp(dr.prod(pitch))
     accum += L * f_q
 
     return (source, stride, pitch, accum), Bool(True)
@@ -309,7 +309,7 @@ def _order_0_backproject(
     source, stride, pitch, accum = state
 
     offset = index @ stride
-    L = dr.norm((p_b - p_a) * pitch)
+    L = dr.norm((p_b - p_a) * pitch) * dr.rcp(dr.prod(pitch))
     dr.scatter_add(accum, L * source, offset, active)
 
     return (source, stride, pitch, accum), Bool(True)
