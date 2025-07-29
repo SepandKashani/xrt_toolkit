@@ -127,7 +127,7 @@ def xrt_struct_apply(
     assert ray_u_spec.ndim == D
 
     assert knot_spec.ndim == D
-    assert order in (0, 1)
+    assert order in (0, 1, 2)
 
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
@@ -238,7 +238,7 @@ def xrt_struct_adjoint(
     assert ray_u_spec.ndim == D
 
     assert knot_spec.ndim == D
-    assert order in (0, 1)
+    assert order in (0, 1, 2)
 
     assert (N_proj := ray_t_spec.shape[-1]) == ray_n_spec.shape[-1]
     L_proj = math.prod(ray_u_spec.num)
