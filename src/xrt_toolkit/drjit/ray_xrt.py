@@ -6,10 +6,12 @@ import drjit as dr
 import xrt_toolkit.util as xrtu
 
 from .bbox import bbox_contains, ray_bbox_intersect
+from .box_spline import box_spline_1d_dr
 from .dda import dda
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
+ArrayNiT = typ.TypeVar("ArrayNiT", bound=dr.AnyArray)
 ArrayNuT = typ.TypeVar("ArrayNuT", bound=dr.AnyArray)
 FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
@@ -98,6 +100,7 @@ def xrt_apply(
     ray_t, ray_n = ray_spec
 
     ArrayNf = type(ray_t)
+    ArrayNi = dr.int32_array_t(ArrayNf)
     ArrayNu = dr.uint32_array_t(ArrayNf)
     Float = dr.value_t(ArrayNf)
     Bool = dr.mask_t(Float)
@@ -147,7 +150,7 @@ def xrt_apply(
             offset = index @ stride
             fq = dr.gather(Float, data, offset, active)
             L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
-            accum += L * fq
+            accum += fq * L
 
             return (accum,), Bool(True)
 
@@ -164,7 +167,9 @@ def xrt_apply(
         )
         if order == 1:
             E = E.xyz
-        E_mask = dr.select(E <= 1e-3, 0, 1)
+
+        E_mask_t = dr.int_array_t(E)
+        E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
 
         def project(
             state: tuple[FloatT],
@@ -176,7 +181,32 @@ def xrt_apply(
             # compute analytic ray<>box-spline projection.
             (accum,) = state
 
-            # compute stuff
+            ray_n = p_b - p_a  # local coordinates
+            n_perp = dr.normalize(  # global coordinates
+                dr.reverse(knot_step * ray_n * ArrayNf(1, -1))
+            )
+
+            direction = dr.abs(ray_n.x) >= dr.abs(ray_n.y)
+            shift_l = dr.select(direction, ArrayNi(0, -1), ArrayNi(-1, 0))
+            shift_m = ArrayNi(0, 0)
+            shift_r = dr.select(direction, ArrayNi(0, +1), ArrayNi(+1, 0))
+
+            def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNfT]:
+                index_s = index + shift  # "_s" = shifted
+                offset = index_s @ stride
+                active = dr.all((0 <= index_s) & (index_s < knot_num))
+                fq = dr.gather(Float, data, offset, active)
+
+                cell_center = ArrayNf(0.5, 0.5) + shift
+                x = dr.dot(n_perp, knot_step * (cell_center - p_a))
+                L = box_spline_1d_dr(E, E_mask, x)
+
+                return (fq, L)
+
+            (fq_l, L_l) = process_shift(shift_l)
+            (fq_m, L_m) = process_shift(shift_m)
+            (fq_r, L_r) = process_shift(shift_r)
+            accum += (fq_l * L_l) + (fq_m * L_m) + (fq_r * L_r)
 
             return (accum,), Bool(True)
 
@@ -246,6 +276,7 @@ def xrt_adjoint(
     ray_t, ray_n = ray_spec
 
     ArrayNf = type(ray_t)
+    ArrayNi = dr.int32_array_t(ArrayNf)
     ArrayNu = dr.uint32_array_t(ArrayNf)
     Float = dr.value_t(ArrayNf)
     Bool = dr.mask_t(Float)
@@ -256,7 +287,7 @@ def xrt_adjoint(
     assert type(ray_n) is ArrayNf
 
     assert knot_spec.ndim == D
-    assert order in (0, 1)
+    assert order in (0, 1, 2)
 
     L = max(ray_t.shape[1], ray_n.shape[1])
     assert type(data) is Float
@@ -299,7 +330,62 @@ def xrt_adjoint(
             return (accum,), Bool(True)
 
     elif D == 2:
-        raise NotImplementedError  # todo
+        # compute (E, E_mask) for box_spline_1d_dr()
+        Array4f = xrtu.float_array_t(Float, 4)
+        ray_n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
+        to_1d = lambda _: dr.abs(ray_n_perp @ (knot_step * _))
+        E = Array4f(
+            to_1d(ArrayNf(+1, +0)),
+            to_1d(ArrayNf(+0, +1)),
+            to_1d(ArrayNf(+1, +1)),
+            to_1d(ArrayNf(+1, -1)),
+        )
+        if order == 1:
+            E = E.xyz
+
+        E_mask_t = dr.int_array_t(E)
+        E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
+
+        def back_project(
+            state: tuple[FloatT],
+            index: ArrayNuT,
+            p_a: ArrayNfT,
+            p_b: ArrayNfT,
+            active: BoolT,
+        ) -> tuple[tuple[FloatT], BoolT]:
+            # compute analytic ray<>box-spline back-projection.
+            (accum,) = state
+
+            ray_n = p_b - p_a  # local coordinates
+            n_perp = dr.normalize(  # global coordinates
+                dr.reverse(knot_step * ray_n * ArrayNf(1, -1))
+            )
+
+            direction = dr.abs(ray_n.x) >= dr.abs(ray_n.y)
+            shift_l = dr.select(direction, ArrayNi(0, -1), ArrayNi(-1, 0))
+            shift_m = ArrayNi(0, 0)
+            shift_r = dr.select(direction, ArrayNi(0, +1), ArrayNi(+1, 0))
+
+            def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNuT, BoolT]:
+                index_s = index + shift  # "_s" = shifted
+                offset = index_s @ stride
+                active = dr.all((0 <= index_s) & (index_s < knot_num))
+
+                cell_center = ArrayNf(0.5, 0.5) + shift
+                x = dr.dot(n_perp, knot_step * (cell_center - p_a))
+                L = box_spline_1d_dr(E, E_mask, x)
+
+                return (L, offset, active)
+
+            (L_l, offset_l, active_l) = process_shift(shift_l)
+            (L_m, offset_m, active_m) = process_shift(shift_m)
+            (L_r, offset_r, active_r) = process_shift(shift_r)
+            dr.scatter_add(accum, L_l * data, offset_l, active_l)
+            dr.scatter_add(accum, L_m * data, offset_m, active_m)
+            dr.scatter_add(accum, L_r * data, offset_r, active_r)
+
+            return (accum,), Bool(True)
+
     elif (D == 3) and (order > 0):
         raise NotImplementedError  # todo
 
