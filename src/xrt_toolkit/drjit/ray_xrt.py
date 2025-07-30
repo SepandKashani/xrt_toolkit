@@ -130,9 +130,9 @@ def xrt_apply(
     bbox_ll = knot_start - (knot_step / 2)
     bbox_ur = knot_start - (knot_step / 2) + (knot_num * knot_step)
     if D == 2:
-        stride = ArrayNu(1, knot_num.x)
+        stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
-        stride = ArrayNu(1, knot_num.x, knot_num.x * knot_num.y)
+        stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
 
     state = (buffer,)
     if order == 0:
@@ -306,9 +306,9 @@ def xrt_adjoint(
     bbox_ll = knot_start - (knot_step / 2)
     bbox_ur = knot_start - (knot_step / 2) + (knot_num * knot_step)
     if D == 2:
-        stride = ArrayNu(1, knot_num.x)
+        stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
-        stride = ArrayNu(1, knot_num.x, knot_num.x * knot_num.y)
+        stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
 
     state = (buffer,)
     if order == 0:
