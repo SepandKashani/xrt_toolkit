@@ -100,6 +100,7 @@ def xrt_apply(
     ArrayNf = type(ray_t)
     ArrayNu = dr.uint32_array_t(ArrayNf)
     Float = dr.value_t(ArrayNf)
+    Bool = dr.mask_t(Float)
 
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
@@ -107,7 +108,7 @@ def xrt_apply(
     assert type(ray_n) is ArrayNf
 
     assert knot_spec.ndim == D
-    assert order in (0, 1)
+    assert order in (0, 1, 2)
 
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
@@ -130,14 +131,57 @@ def xrt_apply(
     elif D == 3:
         stride = ArrayNu(1, knot_num.x, knot_num.x * knot_num.y)
 
+    state = (buffer,)
     if order == 0:
-        state = (data, stride, knot_step, buffer)
-        func = _order_0_project
-    elif order == 1:
-        if D == 2:
-            raise NotImplementedError  # todo
-        elif D == 3:
-            raise NotImplementedError  # todo
+
+        def project(
+            state: tuple[FloatT],
+            index: ArrayNuT,
+            p_a: ArrayNfT,
+            p_b: ArrayNfT,
+            active: BoolT,
+        ) -> tuple[tuple[FloatT], BoolT]:
+            # compute analytic ray/cell projection.
+            (accum,) = state
+
+            offset = index @ stride
+            fq = dr.gather(Float, data, offset, active)
+            L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            accum += L * fq
+
+            return (accum,), Bool(True)
+
+    elif D == 2:
+        # compute (E, E_mask) for box_spline_1d_dr()
+        Array4f = xrtu.float_array_t(Float, 4)
+        ray_n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
+        to_1d = lambda _: dr.abs(ray_n_perp @ (knot_step * _))
+        E = Array4f(
+            to_1d(ArrayNf(+1, +0)),
+            to_1d(ArrayNf(+0, +1)),
+            to_1d(ArrayNf(+1, +1)),
+            to_1d(ArrayNf(+1, -1)),
+        )
+        if order == 1:
+            E = E.xyz
+        E_mask = dr.select(E <= 1e-3, 0, 1)
+
+        def project(
+            state: tuple[FloatT],
+            index: ArrayNuT,
+            p_a: ArrayNfT,
+            p_b: ArrayNfT,
+            active: BoolT,
+        ) -> tuple[tuple[FloatT], BoolT]:
+            # compute analytic ray<>box-spline projection.
+            (accum,) = state
+
+            # compute stuff
+
+            return (accum,), Bool(True)
+
+    elif (D == 3) and (order > 0):
+        raise NotImplementedError  # todo
 
     # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
     # -> rewind `ray_t` for it to lie outside the bbox boundary.
@@ -156,7 +200,7 @@ def xrt_apply(
         grid_res=knot_num,
         grid_min=bbox_ll,
         grid_max=bbox_ur,
-        func=func,
+        func=project,
         state=state,
         active=active,
         mode="symbolic",
@@ -164,29 +208,6 @@ def xrt_apply(
     )
 
     return buffer
-
-
-def _order_0_project(
-    state: tuple[FloatT, ArrayNuT, ArrayNfT, FloatT],
-    index: ArrayNuT,
-    p_a: ArrayNfT,
-    p_b: ArrayNfT,
-    active: BoolT,
-) -> tuple[tuple[FloatT, ArrayNuT, ArrayNfT, FloatT], BoolT]:
-    """
-    Compute analytic ray/cell projection.
-    """
-    Float = type(p_a.x)
-    Bool = dr.mask_t(Float)
-
-    source, stride, pitch, accum = state
-
-    offset = index @ stride
-    f_q = dr.gather(Float, source, offset, active)
-    L = dr.norm((p_b - p_a) * pitch) * dr.rcp(dr.prod(pitch))
-    accum += L * f_q
-
-    return (source, stride, pitch, accum), Bool(True)
 
 
 def xrt_adjoint(
@@ -227,6 +248,7 @@ def xrt_adjoint(
     ArrayNf = type(ray_t)
     ArrayNu = dr.uint32_array_t(ArrayNf)
     Float = dr.value_t(ArrayNf)
+    Bool = dr.mask_t(Float)
 
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
@@ -257,14 +279,29 @@ def xrt_adjoint(
     elif D == 3:
         stride = ArrayNu(1, knot_num.x, knot_num.x * knot_num.y)
 
+    state = (buffer,)
     if order == 0:
-        state = (data, stride, knot_step, buffer)
-        func = _order_0_backproject
-    elif order == 1:
-        if D == 2:
-            raise NotImplementedError  # todo
-        elif D == 3:
-            raise NotImplementedError  # todo
+
+        def back_project(
+            state: tuple[FloatT],
+            index: ArrayNuT,
+            p_a: ArrayNfT,
+            p_b: ArrayNfT,
+            active: BoolT,
+        ) -> tuple[tuple[FloatT], BoolT]:
+            # compute analytic ray/cell back-projection.
+            (accum,) = state
+
+            offset = index @ stride
+            L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            dr.scatter_add(accum, L * data, offset, active)
+
+            return (accum,), Bool(True)
+
+    elif D == 2:
+        raise NotImplementedError  # todo
+    elif (D == 3) and (order > 0):
+        raise NotImplementedError  # todo
 
     # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
     # -> rewind `ray_t` for it to lie outside the bbox boundary.
@@ -283,7 +320,7 @@ def xrt_adjoint(
         grid_res=knot_num,
         grid_min=bbox_ll,
         grid_max=bbox_ur,
-        func=func,
+        func=back_project,
         state=state,
         active=active,
         mode="symbolic",
@@ -291,25 +328,3 @@ def xrt_adjoint(
     )
 
     return buffer
-
-
-def _order_0_backproject(
-    state: tuple[FloatT, ArrayNuT, ArrayNfT, FloatT],
-    index: ArrayNuT,
-    p_a: ArrayNfT,
-    p_b: ArrayNfT,
-    active: BoolT,
-) -> tuple[tuple[FloatT, ArrayNuT, ArrayNfT, FloatT], BoolT]:
-    """
-    Compute analytic ray/cell back-projection.
-    """
-    Float = type(p_a.x)
-    Bool = dr.mask_t(Float)
-
-    source, stride, pitch, accum = state
-
-    offset = index @ stride
-    L = dr.norm((p_b - p_a) * pitch) * dr.rcp(dr.prod(pitch))
-    dr.scatter_add(accum, L * source, offset, active)
-
-    return (source, stride, pitch, accum), Bool(True)
