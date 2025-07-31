@@ -157,8 +157,8 @@ def xrt_apply(
     elif D == 2:
         # compute (E, E_mask) for box_spline_1d_dr()
         Array4f = xrtu.float_array_t(Float, 4)
-        ray_n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
-        to_1d = lambda _: dr.abs(ray_n_perp @ (knot_step * _))
+        n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
+        to_1d = lambda _: dr.abs(n_perp @ (knot_step * _))
         E = Array4f(
             to_1d(ArrayNf(+1, +0)),
             to_1d(ArrayNf(+0, +1)),
@@ -181,15 +181,11 @@ def xrt_apply(
             # compute analytic ray<>box-spline projection.
             (accum,) = state
 
-            ray_n = p_b - p_a  # local coordinates
-            n_perp = dr.normalize(  # global coordinates
-                dr.reverse(knot_step * ray_n * ArrayNf(1, -1))
-            )
-
-            direction = dr.abs(ray_n.x) >= dr.abs(ray_n.y)
-            shift_l = dr.select(direction, ArrayNi(0, -1), ArrayNi(-1, 0))
+            direction = p_b - p_a
+            look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
+            shift_l = dr.select(look_lr, ArrayNi(0, -1), ArrayNi(-1, 0))
             shift_m = ArrayNi(0, 0)
-            shift_r = dr.select(direction, ArrayNi(0, +1), ArrayNi(+1, 0))
+            shift_r = dr.select(look_lr, ArrayNi(0, +1), ArrayNi(+1, 0))
 
             def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNfT]:
                 index_s = index + shift  # "_s" = shifted
@@ -332,8 +328,8 @@ def xrt_adjoint(
     elif D == 2:
         # compute (E, E_mask) for box_spline_1d_dr()
         Array4f = xrtu.float_array_t(Float, 4)
-        ray_n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
-        to_1d = lambda _: dr.abs(ray_n_perp @ (knot_step * _))
+        n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
+        to_1d = lambda _: dr.abs(n_perp @ (knot_step * _))
         E = Array4f(
             to_1d(ArrayNf(+1, +0)),
             to_1d(ArrayNf(+0, +1)),
@@ -356,15 +352,11 @@ def xrt_adjoint(
             # compute analytic ray<>box-spline back-projection.
             (accum,) = state
 
-            ray_n = p_b - p_a  # local coordinates
-            n_perp = dr.normalize(  # global coordinates
-                dr.reverse(knot_step * ray_n * ArrayNf(1, -1))
-            )
-
-            direction = dr.abs(ray_n.x) >= dr.abs(ray_n.y)
-            shift_l = dr.select(direction, ArrayNi(0, -1), ArrayNi(-1, 0))
+            direction = p_b - p_a
+            look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
+            shift_l = dr.select(look_lr, ArrayNi(0, -1), ArrayNi(-1, 0))
             shift_m = ArrayNi(0, 0)
-            shift_r = dr.select(direction, ArrayNi(0, +1), ArrayNi(+1, 0))
+            shift_r = dr.select(look_lr, ArrayNi(0, +1), ArrayNi(+1, 0))
 
             def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNuT, BoolT]:
                 index_s = index + shift  # "_s" = shifted
