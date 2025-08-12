@@ -1,23 +1,37 @@
-+ [0/2] [drjit.ray_xrt.py] Implement order-1/2 methods (2D)
-  - [ ] _order_[12]_project()
-  - [ ] _order_[12]_backproject()
++ Factorize supported box-splines into helper function.
+  Propagate changes to all code needing them.
 
-  Changes to xrt_[apply,adjoint]() should be limited to setting the right state variables.
++ box_spline_1d_dr(): efficiency
+  Having exponent fixed increases performance a lot.
+  This can be done if N_nz is known in advance.
+  Refactor code to use fast path for N_nz = N_tot, and general path for zero-containing entries.
 
-+ Add interpolation module to compute (knot \conv box-spline) output on uniform mesh.
++ 2025.08.05: Drjit v1.1.0 released.
+  Read changelog, make necessary adjustments.
+
+  + [drjit v1.1+] Use NNs to evaluate box_splines?
+    This should be tested in JAX beforehand; will be rolled out to drjit base if conclusive.
+
+  + [drjit v1.1+] Use dr.freeze() to speed up tracing time?
+
++ plot_2d_basis()
+  LHS: show actual function values (with colorbar), not only the support.
+
++ Add helpers to setup parallel/fan/cone beam setups.
 
 + Add DR test suite
 
-+ Add helpers to setup parallel/fan/cone beam setups.
++ Add interpolation module to compute (knot \conv box-spline) output on uniform mesh.
+  For simplicity we only support the upsampling case where the mesh aligns with the knot space, i.e.
+
+  step_out = step_in / Q, Q \in \bN^{*}
+  start_out = start_in + step_out * l, l \in \bZ
+
+  Uses numpy/cupy behind the scenes
 
 + Implement FBP/FDK, with choice of filters.
   Supported scan geometries: PBCT, FBCT, CBCT
   Only support xrt_struct-format, hence non-uniform angles ok?
-
-+ [1/2] Add NumPy, CuPy, PyTorch, JAX interface
-
-  [x] Interop provided via utils.asarray()
-  [ ] add explicit PyTorch/JAX interface with custom vjp() rules?
 
 + RX-solutions: XML ingestor
   - standard XML format
@@ -26,3 +40,12 @@
 + [0/2] [drjit.ray_xrt.py] Implement order-1/2 methods (3D)
   - [ ] _order_[12]_project()
   - [ ] _order_[12]_backproject()
+
++ [1/2] Add NumPy, CuPy, PyTorch, JAX interface
+
+  [x] Interop provided via utils.asarray()
+  [ ] add explicit PyTorch/JAX interface with custom vjp() rules?
+
++ Voxel-driven back-projection: difference with ray-based approach?
+  Is this beneficial to improve bproj performance?
+  If yes, how to implement efficiently in drjit?
