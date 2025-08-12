@@ -134,8 +134,8 @@ def xrt_apply(
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
 
-    state = (buffer,)
     if order == 0:
+        state = (buffer,)
 
         def project(
             state: tuple[FloatT],
@@ -155,6 +155,9 @@ def xrt_apply(
             return (accum,), Bool(True)
 
     elif D == 2:
+        index_prev = ArrayNi(-1)  # previous visited cell
+        state = (buffer, index_prev)
+
         # compute (E, E_mask) for box_spline_1d_dr()
         Array4f = xrtu.float_array_t(Float, 4)
         n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
@@ -167,25 +170,26 @@ def xrt_apply(
         )
         if order == 1:
             E = E.xyz
-
         E_mask_t = dr.int_array_t(E)
         E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
 
+        # (main, lateral) movement direction
+        direction = ray_n * dr.rcp(knot_step)
+        look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
+        mv_dir = dr.select(look_lr, ArrayNi(+1, 0), ArrayNi(0, +1))
+        shift_l = dr.reverse(-mv_dir)
+        shift_m = ArrayNi(0, 0)
+        shift_r = dr.reverse(+mv_dir)
+
         def project(
-            state: tuple[FloatT],
+            state: tuple[FloatT, ArrayNiT],
             index: ArrayNuT,
             p_a: ArrayNfT,
             p_b: ArrayNfT,
             active: BoolT,
-        ) -> tuple[tuple[FloatT], BoolT]:
+        ) -> tuple[tuple[FloatT, ArrayNiT], BoolT]:
             # compute analytic ray<>box-spline projection.
-            (accum,) = state
-
-            direction = p_b - p_a
-            look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
-            shift_l = dr.select(look_lr, ArrayNi(0, -1), ArrayNi(-1, 0))
-            shift_m = ArrayNi(0, 0)
-            shift_r = dr.select(look_lr, ArrayNi(0, +1), ArrayNi(+1, 0))
+            (accum, index_prev) = state
 
             def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNfT]:
                 index_s = index + shift  # "_s" = shifted
@@ -202,9 +206,25 @@ def xrt_apply(
             (fq_l, L_l) = process_shift(shift_l)
             (fq_m, L_m) = process_shift(shift_m)
             (fq_r, L_r) = process_shift(shift_r)
-            accum += (fq_l * L_l) + (fq_m * L_m) + (fq_r * L_r)
 
-            return (accum,), Bool(True)
+            # mask updates depending on inter-cell displacement
+            Array3f = xrtu.float_array_t(Float, 3)
+            displacement = ArrayNi(index) - index_prev
+            fq_lmr = dr.if_stmt(
+                (fq_l, fq_m, fq_r),
+                dr.dot(displacement, mv_dir) != 0,  # going in mv_dir
+                lambda l, m, r: Array3f(l, m, r),
+                lambda l, m, r: dr.select(
+                    dr.dot(displacement, dr.reverse(mv_dir)) == -1,  # going left
+                    Array3f(l, 0, 0),
+                    Array3f(0, 0, r),
+                ),
+            )
+            L_lmr = Array3f(L_l, L_m, L_r)
+
+            accum += dr.dot(fq_lmr, L_lmr)
+
+            return (accum, ArrayNi(index)), Bool(True)
 
     elif (D == 3) and (order > 0):
         raise NotImplementedError  # todo
@@ -306,8 +326,8 @@ def xrt_adjoint(
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
 
-    state = (buffer,)
     if order == 0:
+        state = (buffer,)
 
         def back_project(
             state: tuple[FloatT],
@@ -326,6 +346,9 @@ def xrt_adjoint(
             return (accum,), Bool(True)
 
     elif D == 2:
+        index_prev = ArrayNi(-1)  # previous visited cell
+        state = (buffer, index_prev)
+
         # compute (E, E_mask) for box_spline_1d_dr()
         Array4f = xrtu.float_array_t(Float, 4)
         n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
@@ -338,25 +361,26 @@ def xrt_adjoint(
         )
         if order == 1:
             E = E.xyz
-
         E_mask_t = dr.int_array_t(E)
         E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
 
+        # (main, lateral) movement direction
+        direction = ray_n * dr.rcp(knot_step)
+        look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
+        mv_dir = dr.select(look_lr, ArrayNi(+1, 0), ArrayNi(0, +1))
+        shift_l = dr.reverse(-mv_dir)
+        shift_m = ArrayNi(0, 0)
+        shift_r = dr.reverse(+mv_dir)
+
         def back_project(
-            state: tuple[FloatT],
+            state: tuple[FloatT, ArrayNiT],
             index: ArrayNuT,
             p_a: ArrayNfT,
             p_b: ArrayNfT,
             active: BoolT,
-        ) -> tuple[tuple[FloatT], BoolT]:
+        ) -> tuple[tuple[FloatT, ArrayNiT], BoolT]:
             # compute analytic ray<>box-spline back-projection.
-            (accum,) = state
-
-            direction = p_b - p_a
-            look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
-            shift_l = dr.select(look_lr, ArrayNi(0, -1), ArrayNi(-1, 0))
-            shift_m = ArrayNi(0, 0)
-            shift_r = dr.select(look_lr, ArrayNi(0, +1), ArrayNi(+1, 0))
+            (accum, index_prev) = state
 
             def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNuT, BoolT]:
                 index_s = index + shift  # "_s" = shifted
@@ -372,11 +396,26 @@ def xrt_adjoint(
             (L_l, offset_l, active_l) = process_shift(shift_l)
             (L_m, offset_m, active_m) = process_shift(shift_m)
             (L_r, offset_r, active_r) = process_shift(shift_r)
-            dr.scatter_add(accum, L_l * data, offset_l, active_l)
-            dr.scatter_add(accum, L_m * data, offset_m, active_m)
-            dr.scatter_add(accum, L_r * data, offset_r, active_r)
 
-            return (accum,), Bool(True)
+            # mask updates depending on inter-cell displacement
+            Array3b = dr.mask_t(xrtu.float_array_t(Float, 3))
+            displacement = ArrayNi(index) - index_prev
+            active_lmr = dr.if_stmt(
+                (active_l, active_m, active_r),
+                dr.dot(displacement, mv_dir) != 0,  # going in mv_dir
+                lambda l, m, r: Array3b(l, m, r),
+                lambda l, m, r: dr.select(
+                    dr.dot(displacement, dr.reverse(mv_dir)) == -1,  # going left
+                    Array3b(l, False, False),
+                    Array3b(False, False, r),
+                ),
+            )
+
+            dr.scatter_add(accum, L_l * data, offset_l, active_lmr.x)
+            dr.scatter_add(accum, L_m * data, offset_m, active_lmr.y)
+            dr.scatter_add(accum, L_r * data, offset_r, active_lmr.z)
+
+            return (accum, ArrayNi(index)), Bool(True)
 
     elif (D == 3) and (order > 0):
         raise NotImplementedError  # todo
