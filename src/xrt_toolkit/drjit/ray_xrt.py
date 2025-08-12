@@ -147,7 +147,7 @@ def xrt_apply(
             # compute analytic ray/cell projection.
             (accum,) = state
 
-            offset = index @ stride
+            offset = dr.dot(index, stride)
             fq = dr.gather(Float, data, offset, active)
             L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
             accum += fq * L
@@ -158,7 +158,7 @@ def xrt_apply(
         # compute (E, E_mask) for box_spline_1d_dr()
         Array4f = xrtu.float_array_t(Float, 4)
         n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
-        to_1d = lambda _: dr.abs(n_perp @ (knot_step * _))
+        to_1d = lambda _: dr.abs_dot(n_perp, (knot_step * _))
         E = Array4f(
             to_1d(ArrayNf(+1, +0)),
             to_1d(ArrayNf(+0, +1)),
@@ -189,7 +189,7 @@ def xrt_apply(
 
             def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNfT]:
                 index_s = index + shift  # "_s" = shifted
-                offset = index_s @ stride
+                offset = dr.dot(index_s, stride)
                 active = dr.all((0 <= index_s) & (index_s < knot_num))
                 fq = dr.gather(Float, data, offset, active)
 
@@ -319,7 +319,7 @@ def xrt_adjoint(
             # compute analytic ray/cell back-projection.
             (accum,) = state
 
-            offset = index @ stride
+            offset = dr.dot(index, stride)
             L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
             dr.scatter_add(accum, L * data, offset, active)
 
@@ -329,7 +329,7 @@ def xrt_adjoint(
         # compute (E, E_mask) for box_spline_1d_dr()
         Array4f = xrtu.float_array_t(Float, 4)
         n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
-        to_1d = lambda _: dr.abs(n_perp @ (knot_step * _))
+        to_1d = lambda _: dr.abs_dot(n_perp, (knot_step * _))
         E = Array4f(
             to_1d(ArrayNf(+1, +0)),
             to_1d(ArrayNf(+0, +1)),
@@ -360,7 +360,7 @@ def xrt_adjoint(
 
             def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNuT, BoolT]:
                 index_s = index + shift  # "_s" = shifted
-                offset = index_s @ stride
+                offset = dr.dot(index_s, stride)
                 active = dr.all((0 <= index_s) & (index_s < knot_num))
 
                 cell_center = ArrayNf(0.5, 0.5) + shift
