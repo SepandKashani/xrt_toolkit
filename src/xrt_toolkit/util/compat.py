@@ -15,9 +15,11 @@ def asarray(x) -> dr.AnyArray:
     Parameters
     ----------
     x: NDArray
-        float[32,64] array of shape (N,), (N, D) or (N, D, D).
+        float[16,32,64] array of shape (N,), (N, D) or (N, D, D).
 
         In DrJit terminology, the leading dimension `N` is assumed to be dynamic-length.
+
+        `D` must be in (2, 3, 4).
 
     Returns
     -------
@@ -44,19 +46,21 @@ def asarray(x) -> dr.AnyArray:
     # Determine correct DRJIT type
     xp = array_api_compat.array_namespace(x)
     finfo = xp.finfo(x.dtype)
-    assert finfo.bits in (32, 64)
+    assert finfo.bits in (16, 32, 64)
+    suffix = {16: "16", 32: "", 64: "64"}[finfo.bits]
 
     assert x.ndim in (1, 2, 3)
-    suffix = "" if (finfo.bits == 32) else "64"
     if x.ndim == 1:
         type_t = f"Float{suffix}"
-    elif x.ndim == 2:
+    else:
         D = x.shape[1]
-        type_t = f"Array{D}f{suffix}"
-    elif x.ndim == 3:
-        D = x.shape[1]
-        assert x.shape[2] == D
-        type_t = f"Array{D}{D}f{suffix}"
+        assert D in (2, 3, 4)
+
+        if x.ndim == 2:
+            type_t = f"Array{D}f{suffix}"
+        elif x.ndim == 3:
+            assert x.shape[2] == D
+            type_t = f"Array{D}{D}f{suffix}"
     type_t = getattr(drb, type_t)
 
     # Zero-copy instantiation of DRJIT array
