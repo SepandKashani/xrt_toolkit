@@ -271,7 +271,6 @@ def plot_2d_basis(
     # setup figure ----------------------------------------
     try:
         plt = importlib.import_module("matplotlib.pyplot")
-        collections = importlib.import_module("matplotlib.collections")
         patches = importlib.import_module("matplotlib.patches")
         sps = importlib.import_module("scipy.spatial")
     except ModuleNotFoundError:
@@ -283,8 +282,7 @@ def plot_2d_basis(
     # helper variables ------------------------------------
     knot_start = np.array(knot_spec.start)
     knot_step = np.array(knot_spec.step)
-    ray_n = ray_n.numpy().T  # (L, 2)
-    ray_n = ray_n / np.linalg.norm(ray_n, axis=1, keepdims=True)
+    ray_n = dr.normalize(ray_n).numpy().T  # (L, 2)
 
     # draw knot_ll ----------------------------------------
     ax[0].scatter(
