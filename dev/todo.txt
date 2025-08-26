@@ -1,11 +1,3 @@
-+ Factorize supported box-splines into helper function.
-  Propagate changes to all code needing them.
-
-+ box_spline_1d_dr(): efficiency
-  Having exponent fixed increases performance a lot.
-  This can be done if N_nz is known in advance.
-  Refactor code to use fast path for N_nz = N_tot, and general path for zero-containing entries.
-
 + 2025.08.05: Drjit v1.1.0 released.
   Read changelog, make necessary adjustments.
 
@@ -13,9 +5,6 @@
     This should be tested in JAX beforehand; will be rolled out to drjit base if conclusive.
 
   + [drjit v1.1+] Use dr.freeze() to speed up tracing time?
-
-+ plot_2d_basis()
-  LHS: show actual function values (with colorbar), not only the support.
 
 + Add helpers to setup parallel/fan/cone beam setups.
 
@@ -49,3 +38,13 @@
 + Voxel-driven back-projection: difference with ray-based approach?
   Is this beneficial to improve bproj performance?
   If yes, how to implement efficiently in drjit?
+
++ [SWE] Python 3.14 available 2025.10.07
+  - pyproject.toml: bump maxver
+  - tox.ini: bump maxver
+    run full test suite.
+    Ensure all dependencies support 3.14
+
++ [SWE] Python 3.10 reaches EOL in 2026.10
+  - pyproject.toml: bump minver
+  - tox.ini: bump minver
