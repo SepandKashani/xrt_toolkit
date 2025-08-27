@@ -3,6 +3,8 @@ import typing as typ
 import drjit as dr
 import numpy as np
 
+import xrt_toolkit.util as xrtu
+
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
 ArrayNiT = typ.TypeVar("ArrayNiT", bound=dr.AnyArray)
 ArrayNbT = typ.TypeVar("ArrayNbT", bound=dr.AnyArray)
@@ -268,3 +270,71 @@ def box_spline_1d_dr(
     y *= dr.rcp(factorial(N_nz - 1) * dr.prod(E + 1 - E_mask))
 
     return y
+
+
+def box_spline_1d_E(
+    order: int,
+    scale: ArrayNfT,
+    proj_dir: ArrayNfT = None,
+):
+    r"""
+    Compute 1D box-spline parameters `\bbE \in \bR^{N}` given 2D projection directions.
+
+    Parameters
+    ----------
+    order: 0 | 1 | 2
+        Data interpolation order.
+        (See :py:func:`~xrt_toolkit.drjit.ray_xrt.xrt_apply`.)
+    scale: ArrayNfT
+        (2,) axial scaling vector applied to :math:`\bbE`.
+        (This can be assimilated to `knot_spec.step` from :py:func:`~xrt_toolkit.drjit.ray_xrt.xrt_apply`.)
+    proj_dir: ArrayNfT, None
+        (2,) projection direction, not necessarily normalized.
+
+    Returns
+    -------
+    - If `proj_dir` is unspecified:
+
+    E: TensorfT
+        (2, order+2) 2D box-spline generator.
+
+    - If `proj_dir` is given:
+
+    E: ArrayNfT
+        1D box-spline direction vectors :math:`\bbE`.
+    E_mask: ArrayNiT
+        0/1-mask of non-zero E entries.
+    """
+    assert order in (0, 1, 2)
+
+    ArrayNf = type(scale)
+    assert dr.size_v(scale) == 2
+    assert dr.shape(scale)[1] == 1, "scale must be shared across dimensions."
+    Float = dr.value_t(ArrayNf)
+
+    if proj_dir is None:
+        Tensor = dr.tensor_t(Float)
+        E = Tensor(
+            [
+                [1, 0, 1, 1],
+                [0, 1, 1, -1],
+            ]
+        ) * Tensor(scale)
+        return E[:, : order + 2]
+    else:
+        assert type(proj_dir) is ArrayNf
+        Array4f = xrtu.float_array_t(Float, 4)
+
+        n = dr.normalize(proj_dir)
+        to_1d = lambda _: dr.abs_dot(n, scale * _)
+        E = Array4f(
+            to_1d(ArrayNf(+1, +0)),
+            to_1d(ArrayNf(+0, +1)),
+            to_1d(ArrayNf(+1, +1)),
+            to_1d(ArrayNf(+1, -1)),
+        )[: order + 2]
+
+        E_mask_t = dr.int_array_t(E)
+        E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
+
+        return E, E_mask

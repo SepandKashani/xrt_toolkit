@@ -7,7 +7,7 @@ import numpy as np
 
 from ..util import UniformSpec
 from .bbox import ray_bbox_intersect
-from .box_spline import box_spline_1d_np
+from .box_spline import box_spline_1d_E, box_spline_1d_np
 
 ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -336,15 +336,10 @@ def plot_2d_basis(
     )
 
     # draw psi support ------------------------------------
-    E_2D = (  # (2, order+2) 2D box-spline directions
-        knot_step[:, np.newaxis]
-        * np.array(
-            [
-                [1, 0, 1, 1],
-                [0, 1, 1, -1],
-            ]
-        )[:, : (order + 2)]
-    )
+    E_2D = box_spline_1d_E(  # (2, order+2) 2D box-spline directions
+        order,
+        scale=ArrayNf(knot_spec.step),
+    ).numpy()
 
     mesh = np.stack(  # (order+2, Nx, Ny)
         # we do [-0.5, 0.5] instead of [0, 1] to be symmetric around central point

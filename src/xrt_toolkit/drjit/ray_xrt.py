@@ -6,7 +6,7 @@ import drjit as dr
 import xrt_toolkit.util as xrtu
 
 from .bbox import bbox_contains, ray_bbox_intersect
-from .box_spline import box_spline_1d_dr
+from .box_spline import box_spline_1d_dr, box_spline_1d_E
 from .dda import dda
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
@@ -159,19 +159,8 @@ def xrt_apply(
         state = (buffer, index_prev)
 
         # compute (E, E_mask) for box_spline_1d_dr()
-        Array4f = xrtu.float_array_t(Float, 4)
         n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
-        to_1d = lambda _: dr.abs_dot(n_perp, (knot_step * _))
-        E = Array4f(
-            to_1d(ArrayNf(+1, +0)),
-            to_1d(ArrayNf(+0, +1)),
-            to_1d(ArrayNf(+1, +1)),
-            to_1d(ArrayNf(+1, -1)),
-        )
-        if order == 1:
-            E = E.xyz
-        E_mask_t = dr.int_array_t(E)
-        E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
+        E, E_mask = box_spline_1d_E(order, knot_step, n_perp)
 
         # (main, lateral) movement direction
         direction = ray_n * dr.rcp(knot_step)
@@ -350,19 +339,8 @@ def xrt_adjoint(
         state = (buffer, index_prev)
 
         # compute (E, E_mask) for box_spline_1d_dr()
-        Array4f = xrtu.float_array_t(Float, 4)
         n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
-        to_1d = lambda _: dr.abs_dot(n_perp, (knot_step * _))
-        E = Array4f(
-            to_1d(ArrayNf(+1, +0)),
-            to_1d(ArrayNf(+0, +1)),
-            to_1d(ArrayNf(+1, +1)),
-            to_1d(ArrayNf(+1, -1)),
-        )
-        if order == 1:
-            E = E.xyz
-        E_mask_t = dr.int_array_t(E)
-        E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
+        E, E_mask = box_spline_1d_E(order, knot_step, n_perp)
 
         # (main, lateral) movement direction
         direction = ray_n * dr.rcp(knot_step)
