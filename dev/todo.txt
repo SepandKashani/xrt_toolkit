@@ -1,22 +1,8 @@
-+ 2025.08.05: Drjit v1.1.0 released.
-  Read changelog, make necessary adjustments.
-
-  + [drjit v1.1+] Use NNs to evaluate box_splines?
-    This should be tested in JAX beforehand; will be rolled out to drjit base if conclusive.
-
-  + [drjit v1.1+] Use dr.freeze() to speed up tracing time?
-
 + Add helpers to setup parallel/fan/cone beam setups.
 
 + Add DR test suite
 
-+ Add interpolation module to compute (knot \conv box-spline) output on uniform mesh.
-  For simplicity we only support the upsampling case where the mesh aligns with the knot space, i.e.
-
-  step_out = step_in / Q, Q \in \bN^{*}
-  start_out = start_in + step_out * l, l \in \bZ
-
-  Uses numpy/cupy behind the scenes
++ DRJIT/ASTRA benchmarks in 3D CBCT setup (CPU, GPU)
 
 + Implement FBP/FDK, with choice of filters.
   Supported scan geometries: PBCT, FBCT, CBCT
@@ -26,18 +12,35 @@
   - standard XML format
   - advanced XML format
 
-+ [0/2] [drjit.ray_xrt.py] Implement order-1/2 methods (3D)
-  - [ ] _order_[12]_project()
-  - [ ] _order_[12]_backproject()
+
+
++ Voxel-driven back-projection: difference with ray-based approach?
+  Is this beneficial to improve bproj performance?
+  If yes, how to implement efficiently in drjit?
+
++ Add interpolation module to compute (knot \conv box-spline) output on uniform mesh.
+  For simplicity we only support the upsampling case where the mesh aligns with the knot space, i.e.
+
+  step_out = step_in / Q, Q \in \bN^{*}
+  start_out = start_in + step_out * l, l \in \bZ
+
+  Uses numpy/cupy behind the scenes
 
 + [1/2] Add NumPy, CuPy, PyTorch, JAX interface
 
   [x] Interop provided via utils.asarray()
   [ ] add explicit PyTorch/JAX interface with custom vjp() rules?
 
-+ Voxel-driven back-projection: difference with ray-based approach?
-  Is this beneficial to improve bproj performance?
-  If yes, how to implement efficiently in drjit?
++ Documentation: add HTML docs on ReadTheDocs
+  Include PBCT/CBCT examples
+
++ [0/2] [drjit.ray_xrt.py] Implement order-1/2 methods (3D)
+  - [ ] _order_[12]_project()
+  - [ ] _order_[12]_backproject()
+
+  + Use NNs to evaluate box_splines?
+    May be faster/equivalent to closed-form expressions, both in 2D and 3D.
+    This should be tested in PyTorch beforehand; will be rolled out via drjit.nn if conclusive.
 
 + [SWE] Python 3.14 available 2025.10.07
   - pyproject.toml: bump maxver
