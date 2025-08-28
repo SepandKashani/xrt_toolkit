@@ -5,9 +5,9 @@ import typing as typ
 import drjit as dr
 import numpy as np
 
-from ..util import UniformSpec
-from .bbox import ray_bbox_intersect
-from .box_spline import box_spline_1d_E, box_spline_1d_np
+from .drjit.bbox import ray_bbox_intersect
+from .drjit.box_spline import box_spline_1d_E, box_spline_1d_np
+from .util import UniformSpec
 
 ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
