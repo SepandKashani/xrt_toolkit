@@ -59,3 +59,34 @@ class UniformSpec:
     def __iter__(self) -> cabc.Iterator:
         for d in range(self.ndim):
             yield (self.start[d], self.step[d], self.num[d])
+
+    @classmethod
+    def centered(cls, step, num) -> "UniformSpec":
+        r"""
+        Initialize a UniformSpec centered at the origin.
+
+        Parameters
+        ----------
+        step: tuple[float]
+            \Delta_{\bbx} \in \bR_{+}^{D}
+        num: tuple[int]
+            (M1,...,MD) lattice size
+
+        Scalars are broadcast to all dimensions.
+
+        Returns
+        -------
+        u_spec: UniformSpec
+        """
+        offset_spec = cls(start=0, step=step, num=num)
+
+        ll = tuple(
+            -step * (num - 1) / 2
+            for (step, num) in zip(offset_spec.step, offset_spec.num)
+        )
+        u_spec = cls(
+            start=ll,
+            step=offset_spec.step,
+            num=offset_spec.num,
+        )
+        return u_spec
