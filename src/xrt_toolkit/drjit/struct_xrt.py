@@ -70,7 +70,7 @@ def xrt_struct_apply(
         .. math::
 
            \bbt(\bbu) = \bbH_{t} \bbu,
-           \bbd(\bbu) = \bbH_{n} \bbu.
+           \bbn(\bbu) = \bbH_{n} \bbu.
 
         `ray_spec` encodes ``L = N_proj * prod(ray_u_spec.num)`` projections.
     knot_spec: UniformSpec
@@ -203,7 +203,7 @@ def xrt_struct_adjoint(
         .. math::
 
            \bbt(\bbu) = \bbH_{t} \bbu,
-           \bbd(\bbu) = \bbH_{n} \bbu.
+           \bbn(\bbu) = \bbH_{n} \bbu.
 
         `ray_spec` encodes ``L = N_proj * prod(ray_u_spec.num)`` projections.
     knot_spec: UniformSpec
