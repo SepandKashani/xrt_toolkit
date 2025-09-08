@@ -1,8 +1,7 @@
-+ Add helpers to setup parallel/fan/cone beam setups.
++ DRJIT/ASTRA benchmarks in 3D CBCT setup (CPU, GPU)
+  Share with EA; check Element for configuration
 
 + Add DR test suite
-
-+ DRJIT/ASTRA benchmarks in 3D CBCT setup (CPU, GPU)
 
 + Implement FBP/FDK, with choice of filters.
   Supported scan geometries: PBCT, FBCT, CBCT
