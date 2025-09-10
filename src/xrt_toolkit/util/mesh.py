@@ -90,3 +90,55 @@ class UniformSpec:
             num=offset_spec.num,
         )
         return u_spec
+
+
+@dataclass
+class DetectorSpec:
+    r"""
+    Physical dimensions of a 1D/2D pixelized detector.
+
+    `DetectorSpec` does not encode the detector's position in space.
+    """
+
+    size: tuple[float]
+    num_cell: tuple[int]
+
+    def __init__(self, size, num_cell):
+        r"""
+        Parameters
+        ----------
+        size: tuple[float]
+            Detector span (unitless) \in \bR_{+}^{D}
+
+            A 1D size denotes detector width.
+            A 2D size denotes detector (width, height).
+        num_cell: tuple[int]
+            (M1,...,MD) cell count per dimension
+
+        Scalars are broadcast to all dimensions.
+        """
+        size = broadcast_seq(size, None, float)
+        assert all(s > 0 for s in size)
+
+        num_cell = broadcast_seq(num_cell, None, int)
+        assert all(n > 0 for n in num_cell)
+
+        D = max(map(len, [size, num_cell]))
+        assert D in (1, 2)
+
+        self.size = broadcast_seq(size, D)
+        self.num_cell = broadcast_seq(num_cell, D)
+
+    @property
+    def cell_size(self) -> tuple[float]:
+        c_size = tuple(self.size[d] / self.num_cell[d] for d in range(self.ndim))
+        return c_size
+
+    @property
+    def ndim(self) -> int:
+        D = len(self.size)
+        return D
+
+    def __iter__(self) -> cabc.Iterator:
+        for d in range(self.ndim):
+            yield (self.size[d], self.num_cell[d])

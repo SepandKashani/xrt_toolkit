@@ -1,6 +1,4 @@
-import collections.abc as cabc
 import typing as typ
-from dataclasses import dataclass
 
 import array_api_compat
 import drjit as dr
@@ -8,57 +6,9 @@ import numpy.typing as npt
 
 from .compat import asarray
 from .mesh import UniformSpec
-from .misc import broadcast_seq
 
 ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNNfT, ArrayNNfT, UniformSpec]
-
-
-@dataclass
-class DetectorSpec:
-    r"""
-    Physical dimensions of a 1D/2D pixelized detector.
-    """
-
-    size: tuple[float]
-    num_cell: tuple[int]
-
-    def __init__(self, size, num_cell):
-        r"""
-        Parameters
-        ----------
-        size: tuple[float]
-            Detector span (unitless) \in \bR_{+}^{D}
-        num_cell: tuple[int]
-            (M1,...,MD) cell count per dimension
-
-        Scalars are broadcast to all dimensions.
-        """
-        size = broadcast_seq(size, None, float)
-        assert all(s > 0 for s in size)
-
-        num_cell = broadcast_seq(num_cell, None, int)
-        assert all(n > 0 for n in num_cell)
-
-        D = max(map(len, [size, num_cell]))
-        assert D in (1, 2)
-
-        self.size = broadcast_seq(size, D)
-        self.num_cell = broadcast_seq(num_cell, D)
-
-    @property
-    def cell_size(self) -> tuple[float]:
-        c_size = tuple(self.size[d] / self.num_cell[d] for d in range(self.ndim))
-        return c_size
-
-    @property
-    def ndim(self) -> int:
-        D = len(self.size)
-        return D
-
-    def __iter__(self) -> cabc.Iterator:
-        for d in range(self.ndim):
-            yield (self.size[d], self.num_cell[d])
 
 
 def parallel_beam(

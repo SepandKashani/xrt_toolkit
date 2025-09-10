@@ -5,11 +5,11 @@ from .dtype import (
     TranslateDType as TranslateDType,
 )
 from .geometry import (
-    DetectorSpec as DetectorSpec,
     parallel_beam as parallel_beam,
     cone_beam as cone_beam,
 )
 from .mesh import (
+    DetectorSpec as DetectorSpec,
     UniformSpec as UniformSpec,
 )
 from .misc import (
