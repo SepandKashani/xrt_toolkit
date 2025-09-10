@@ -4,10 +4,6 @@ from .compat import (
 from .dtype import (
     TranslateDType as TranslateDType,
 )
-from .geometry import (
-    parallel_beam as parallel_beam,
-    cone_beam as cone_beam,
-)
 from .mesh import (
     DetectorSpec as DetectorSpec,
     UniformSpec as UniformSpec,
