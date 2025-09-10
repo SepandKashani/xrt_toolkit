@@ -4,12 +4,13 @@ import typing as typ
 
 import drjit as dr
 
-ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
-FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
-ArrayNuT = typ.TypeVar("ArrayNuT", bound=dr.AnyArray)
 IntT = typ.TypeVar("IntT", bound=dr.AnyArray)
-ArrayNiT = typ.TypeVar("ArrayNiT", bound=dr.AnyArray)
 UIntT = typ.TypeVar("UIntT", bound=dr.AnyArray)
+FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
+ArrayNiT = typ.TypeVar("ArrayNiT", bound=dr.AnyArray)
+ArrayNuT = typ.TypeVar("ArrayNuT", bound=dr.AnyArray)
+ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
+MatrixNfT = typ.TypeVar("MatrixNfT", bound=dr.AnyArray)
 
 
 def float_array_t(arg: FloatT, size_v: int) -> ArrayNfT:
@@ -38,6 +39,35 @@ def float_array_t(arg: FloatT, size_v: int) -> ArrayNfT:
 
     drb = importlib.import_module(arg.__module__)
     type_t = getattr(drb, f"Array{size_v}f{suffix}")
+    return type_t
+
+
+def float_matrix_t(arg: FloatT, size_v: int) -> ArrayNfT:
+    """
+    Converts a Dr.Jit floating-point base type into a square matrix type with the same precision.
+
+    Parameters
+    ----------
+    arg: FloatT
+        (N,) FP array, or an FP type.
+
+    Returns
+    -------
+    type_t: MatrixNfT
+    """
+    assert dr.is_float_v(arg)
+    assert size_v in (2, 3, 4)
+
+    Float = arg if inspect.isclass(arg) else type(arg)
+    nbytes = dr.itemsize_v(Float)
+    assert nbytes in (2, 4, 8)
+    if nbytes == 4:
+        suffix = ""
+    else:
+        suffix = str(nbytes * 8)
+
+    drb = importlib.import_module(arg.__module__)
+    type_t = getattr(drb, f"Matrix{size_v}f{suffix}")
     return type_t
 
 
