@@ -223,12 +223,20 @@ def xrt_apply(
         state = (buffer, index_prev)
         
         direction = ray_n * dr.rcp(knot_step)
-        look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
-        mv_dir = dr.select(look_lr, ArrayNi(+1, 0), ArrayNi(0, +1))
-        shift_l = dr.reverse(-mv_dir)
-        shift_m = ArrayNi(0, 0)
-        shift_r = dr.reverse(+mv_dir)
+        look_lr = dr.abs(direction.x) >= dr.abs(direction.y) # true for "angles" small
+
+        todo = ArrayNi(+99999, 0, 0) #TODO 
+
+        shift_m = ArrayNi(0, 0, 0)
+
+        mv_dir_u = dr.select(look_lr, ArrayNi(+1, 0, 0), todo)
+        shift_u = dr.reverse(-mv_dir_u)
+        shift_d = dr.reverse(+mv_dir_u)
         
+        mv_dir = dr.select(look_lr, ArrayNi(0, +1, 0), todo)
+        shift_l = dr.reverse(-mv_dir)
+        shift_r = dr.reverse(+mv_dir)
+
         def project(
             state: tuple[FloatT, ArrayNiT],
             index: ArrayNuT,
@@ -256,7 +264,43 @@ def xrt_apply(
             (fq_m, L_m) = process_shift(shift_m)
             (fq_r, L_r) = process_shift(shift_r)
 
-            accum += fq_m * L_m
+            (fq_u, L_u) = process_shift(shift_u)
+            (fq_d, L_d) = process_shift(shift_d)
+
+            # accum += fq_m * L_m + fq_l * L_l + fq_r * L_r
+            
+            Array3f = xrtu.float_array_t(Float, 3)
+            displacement = ArrayNi(index) - index_prev
+
+            # displacement = displacement[:]
+            # mv_dir_u_ = mv_dir_u[:]
+            
+            fq_lmr = dr.if_stmt(
+                (fq_l, fq_m, fq_r),
+                dr.dot(displacement, mv_dir_u) != 0,  # going in mv_dir
+                lambda l, m, r: Array3f(l, m, r),
+                lambda l, m, r: dr.select(
+                    dr.dot(displacement, dr.reverse(mv_dir_u)) == -1,  # going left
+                    Array3f(l, 0, 0),
+                    Array3f(0, 0, r),
+                ),
+            )
+            L_lmr = Array3f(L_l, L_m, L_r)
+
+            # fq_umd = dr.if_stmt(
+            #     (fq_u, fq_m, fq_d),
+            #     dr.dot(displacement[1:2, :], mv_dir_u[1:2, :]) != 0,  # going in mv_dir
+            #     lambda u, m, d: Array3f(u, m, d),
+            #     lambda u, m, d: dr.select(
+            #         dr.dot(displacement, dr.reverse(mv_dir_u)) == -1,  # going left
+            #         Array3f(u, 0, 0),
+            #         Array3f(0, 0, d),
+            #     ),
+            # )
+            # L_umd = Array3f(L_u, L_m, L_d)
+
+            accum += dr.dot(fq_lmr, L_lmr)
+            # accum += dr.dot(fq_umd, L_umd) 
 
             return (accum, ArrayNi(index)), Bool(True)
 
