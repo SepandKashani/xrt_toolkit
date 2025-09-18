@@ -20,5 +20,6 @@ from .drjit.struct_xrt import (
 )
 from .util import (
     UniformSpec as UniformSpec,
+    DetectorSpec as DetectorSpec,
     asarray as asarray,
 )
