@@ -271,6 +271,61 @@ def box_spline_1d_dr(
 
     return y
 
+# neural network for fast closed form evaluation of 3D spline projections
+import torch
+import torch.nn as nn
+
+class SplineNN(nn.Module):
+    def __init__(self, input_dim=4, output_dim=1):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, 16)
+        self.fc2 = nn.Linear(16, 16)
+        self.fc3 = nn.Linear(16, 16)
+        self.fc4 = nn.Linear(16, 16)
+        self.fc5 = nn.Linear(16, output_dim)
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        x = torch.relu(self.fc3(x))
+        x = torch.relu(self.fc4(x))
+        return self.fc5(x)
+    
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = SplineNN(input_dim=4, output_dim=1).to(device)
+model.load_state_dict(torch.load('3D_boxsplines_model.pth', map_location=device))
+model.eval()
+
+@dr.wrap(source='drjit', target='torch')
+def nn_project(x, z, n):
+    x_th = torch.asarray(x).to(device)
+    z_th = torch.asarray(z).to(device)
+    cos_theta = torch.asarray(n[0,:]).to(device)
+    sin_theta = torch.asarray(n[1,:]).to(device)
+    input_tensor = torch.stack((x_th, z_th, cos_theta, sin_theta), dim=1)
+    with torch.no_grad():
+        output = model(input_tensor).squeeze()
+
+    return output.reshape(x.shape)
+
+def spline_3d_dr(x: FloatT, z: FloatT, n: ArrayNfT) -> FloatT:
+    r"""
+    DrJit implementation to compute cubic spline :math:`\phi(x)`.
+
+    Parameters
+    ----------
+    x: FloatT
+        Evaluation points :math:`x \in \bR`.
+
+    Returns
+    -------
+    y: FloatT
+        Spline values :math:`\phi(x)`.
+    """
+    Float = type(x)
+
+    y = dr.detach(nn_project(x, z, n), preserve_type=False) # 1) Embedding pytorch needs evaluated mode according to documentation 2) output when wrapping is automatically a cuda.ad array, so we detach it to get a Float array
+
+    return Float(y)
 
 def box_spline_1d_E(
     order: int,

@@ -250,7 +250,7 @@ def dda(
         state=(active, state, dt_v, p0, pi, t_max),
         body=body_fn,
         cond=lambda *args: args[0],
-        mode=mode,
+        mode="evaluated",
         labels=("active", "state", "dt_v", "p1", "pi", "t_rem"),
         max_iterations=max_iterations,
     )[1]

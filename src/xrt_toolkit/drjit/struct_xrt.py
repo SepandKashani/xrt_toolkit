@@ -149,7 +149,7 @@ def xrt_struct_apply(
 
     i = UInt(0)
     index = dr.arange(UInt, 0, L_proj)
-    while i < N_proj:
+    while dr.hint(i < N_proj, mode="evaluated"):
         H_t = dr.gather(ArrayNNf, ray_t_spec, i)
         ray_t = H_t @ uu
 

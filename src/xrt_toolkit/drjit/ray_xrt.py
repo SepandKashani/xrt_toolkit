@@ -6,7 +6,7 @@ import drjit as dr
 import xrt_toolkit.util as xrtu
 
 from .bbox import bbox_contains, ray_bbox_intersect
-from .box_spline import box_spline_1d_dr, box_spline_1d_E
+from .box_spline import box_spline_1d_dr, box_spline_1d_E, spline_3d_dr
 from .dda import dda
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
@@ -216,7 +216,50 @@ def xrt_apply(
             return (accum, ArrayNi(index)), Bool(True)
 
     elif (D == 3) and (order > 0):
-        raise NotImplementedError  # todo
+        n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x, ray_n.z)) # -sin theta, cos theta, 0 (for parallel beam)
+        n = dr.normalize(ray_n) # cos theta, sin theta, 0 (for parallel beam)
+
+        index_prev = ArrayNi(-1)  # previous visited cell
+        state = (buffer, index_prev)
+        
+        direction = ray_n * dr.rcp(knot_step)
+        look_lr = dr.abs(direction.x) >= dr.abs(direction.y)
+        mv_dir = dr.select(look_lr, ArrayNi(+1, 0), ArrayNi(0, +1))
+        shift_l = dr.reverse(-mv_dir)
+        shift_m = ArrayNi(0, 0)
+        shift_r = dr.reverse(+mv_dir)
+        
+        def project(
+            state: tuple[FloatT, ArrayNiT],
+            index: ArrayNuT,
+            p_a: ArrayNfT,
+            p_b: ArrayNfT,
+            active: BoolT,
+        ) -> tuple[tuple[FloatT, ArrayNiT], BoolT]:
+            # compute analytic ray<>box-spline projection.
+            (accum, index_prev) = state
+
+            def process_shift(shift: ArrayNiT) -> tuple[ArrayNfT, ArrayNfT]:
+                index_s = index + shift  # "_s" = shifted
+                offset = dr.dot(index_s, stride)
+                active = dr.all((0 <= index_s) & (index_s < knot_num))
+                fq = dr.gather(Float, data, offset, active)
+
+                cell_center = ArrayNf(0.5, 0.5, 0.5) + shift
+                x = dr.dot(n_perp, knot_step * (cell_center - p_a)) # horizontal position of detector
+                z = (knot_step * (cell_center - p_a))[2,:] # vertical position of detector
+                L = spline_3d_dr(x, z, n)
+
+                return (fq, L)
+
+            (fq_l, L_l) = process_shift(shift_l)
+            (fq_m, L_m) = process_shift(shift_m)
+            (fq_r, L_r) = process_shift(shift_r)
+
+            accum += fq_m * L_m
+
+            return (accum, ArrayNi(index)), Bool(True)
+
 
     # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
     # -> rewind `ray_t` for it to lie outside the bbox boundary.
@@ -238,7 +281,7 @@ def xrt_apply(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode="evaluated",
         max_iterations=-1,
     )
 

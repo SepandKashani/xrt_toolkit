@@ -2,6 +2,9 @@
 dev/scratch/*
 !dev/scratch/README
 
+src/test.py
+src/data_3D__spline.npy
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
