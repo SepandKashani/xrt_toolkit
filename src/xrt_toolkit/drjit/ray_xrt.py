@@ -216,27 +216,23 @@ def xrt_apply(
             return (accum, ArrayNi(index)), Bool(True)
 
     elif (D == 3) and (order > 0):
-        n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x, ray_n.z)) # -sin theta, cos theta, 0 (for parallel beam)
+        # TODO case where ray touches an edge : conditions are stricter
+        
         n = dr.normalize(ray_n) # cos theta, sin theta, 0 (for parallel beam)
-
         index_prev = ArrayNi(-1)  # previous visited cell
         state = (buffer, index_prev)
-        
-        direction = ray_n * dr.rcp(knot_step)
-        look_lr = dr.abs(direction.x) >= dr.abs(direction.y) # true for "angles" small
+        direction = dr.abs(ray_n * dr.rcp(knot_step))
 
-        todo = ArrayNi(+99999, 0, 0) #TODO 
+        dominant_axis = dr.floor(direction / dr.max(direction) + 1e-6) # floating precision issues TODO case 110, 011, 101 is diagonal (choose one randomly)
+        shift_x = ArrayNf(dominant_axis.y, dominant_axis.z, dominant_axis.x)
+        shift_y = dr.cross(dominant_axis, shift_x)
+
+        # gram-schmidt to get n_perp_x and n_perp_y
+        n_perp_x = dr.normalize(shift_x - dr.dot(shift_x, n) * n)
+        n_perp_y = dr.cross(n, n_perp_x) 
 
         shift_m = ArrayNi(0, 0, 0)
-
-        mv_dir_u = dr.select(look_lr, ArrayNi(+1, 0, 0), todo)
-        shift_u = dr.reverse(-mv_dir_u)
-        shift_d = dr.reverse(+mv_dir_u)
         
-        mv_dir = dr.select(look_lr, ArrayNi(0, +1, 0), todo)
-        shift_l = dr.reverse(-mv_dir)
-        shift_r = dr.reverse(+mv_dir)
-
         def project(
             state: tuple[FloatT, ArrayNiT],
             index: ArrayNuT,
@@ -254,53 +250,131 @@ def xrt_apply(
                 fq = dr.gather(Float, data, offset, active)
 
                 cell_center = ArrayNf(0.5, 0.5, 0.5) + shift
-                x = dr.dot(n_perp, knot_step * (cell_center - p_a)) # horizontal position of detector
-                z = (knot_step * (cell_center - p_a))[2,:] # vertical position of detector
-                L = spline_3d_dr(x, z, n)
+                x = dr.dot(n_perp_y, knot_step * (cell_center - p_a)) # horizontal position of detector
+                y = dr.dot(n_perp_x, knot_step * (cell_center - p_a)) # vertical position of detector
 
+                L = spline_3d_dr(x, y, n)
+                
                 return (fq, L)
 
-            (fq_l, L_l) = process_shift(shift_l)
-            (fq_m, L_m) = process_shift(shift_m)
-            (fq_r, L_r) = process_shift(shift_r)
+            (fq_mlr, L_mlr) = process_shift(shift_m)
+            (fq_mud, L_mud) = process_shift(shift_m)
+            (fq_l, L_l) = process_shift(shift_x)
+            (fq_r, L_r) = process_shift(-shift_x)
+            (fq_d, L_d) = process_shift(shift_y)
+            (fq_u, L_u) = process_shift(-shift_y)
 
-            (fq_u, L_u) = process_shift(shift_u)
-            (fq_d, L_d) = process_shift(shift_d)
+            (fq_ll, L_ll) = process_shift(shift_x + shift_y)
+            (fq_rr, L_rr) = process_shift(-shift_x - shift_y)
+            (fq_lr, L_lr) = process_shift(shift_x - shift_y)
+            (fq_rl, L_rl) = process_shift(-shift_x + shift_y)
 
-            # accum += fq_m * L_m + fq_l * L_l + fq_r * L_r
-            
             Array3f = xrtu.float_array_t(Float, 3)
             displacement = ArrayNi(index) - index_prev
-
-            # displacement = displacement[:]
-            # mv_dir_u_ = mv_dir_u[:]
             
             fq_lmr = dr.if_stmt(
-                (fq_l, fq_m, fq_r),
-                dr.dot(displacement, mv_dir_u) != 0,  # going in mv_dir
-                lambda l, m, r: Array3f(l, m, r),
+                (fq_l, fq_mlr, fq_r),
+                dr.dot(displacement, shift_x) != 0,  # going in mv_dir
                 lambda l, m, r: dr.select(
-                    dr.dot(displacement, dr.reverse(mv_dir_u)) == -1,  # going left
-                    Array3f(l, 0, 0),
+                    dr.dot(displacement, shift_x) == -1,  # going left
                     Array3f(0, 0, r),
+                    Array3f(l, 0, 0),
                 ),
+                lambda l, m, r: Array3f(l, m, r),
             )
-            L_lmr = Array3f(L_l, L_m, L_r)
 
-            # fq_umd = dr.if_stmt(
-            #     (fq_u, fq_m, fq_d),
-            #     dr.dot(displacement[1:2, :], mv_dir_u[1:2, :]) != 0,  # going in mv_dir
-            #     lambda u, m, d: Array3f(u, m, d),
-            #     lambda u, m, d: dr.select(
-            #         dr.dot(displacement, dr.reverse(mv_dir_u)) == -1,  # going left
-            #         Array3f(u, 0, 0),
-            #         Array3f(0, 0, d),
-            #     ),
-            # )
-            # L_umd = Array3f(L_u, L_m, L_d)
+            L_mlr = dr.select(
+                dr.dot(displacement, shift_x) == 0,
+                0,
+                L_mlr,
+            )
+            L_l = dr.select(
+                dr.dot(displacement, shift_y) != 0,
+                0,
+                L_l,
+            )
+            L_r = dr.select(
+                dr.dot(displacement, shift_y) != 0,
+                0,
+                L_r,
+            )
+            L_lmr = Array3f(L_l, L_mlr, L_r)
 
+            fq_dmu = dr.if_stmt(
+                (fq_d, fq_mud, fq_u),
+
+                dr.dot(displacement, shift_y) != 0,  # going in mv_dir
+                lambda d, m, u: dr.select(
+                    dr.dot(displacement, shift_y) == -1,  # going down
+                    Array3f(0, 0, u),
+                    Array3f(d, 0, 0),
+                ),
+                lambda d, m, u: Array3f(d, m, u),
+            )
+
+            L_mud = L_mud - L_mlr
+            L_d = dr.select(
+                dr.dot(displacement, shift_x) != 0,
+                0,
+                L_d,
+            )
+            L_u = dr.select(
+                dr.dot(displacement, shift_x) != 0,
+                0,
+                L_u,
+            )
+
+            L_dmu = Array3f(L_d, L_mud, L_u)
+
+
+            accum += dr.dot(fq_dmu, L_dmu) 
             accum += dr.dot(fq_lmr, L_lmr)
-            # accum += dr.dot(fq_umd, L_umd) 
+
+            fq_ll = dr.select(
+                dr.dot(displacement, shift_y) != 0,
+                0,
+                fq_ll,
+            )
+            fq_ll = dr.select(
+                dr.dot(displacement, shift_x) != 0,
+                0,
+                fq_ll,
+            )
+            fq_rr = dr.select(
+                dr.dot(displacement, shift_y) != 0,
+                0,
+                fq_rr,
+            )
+            fq_rr = dr.select(
+                dr.dot(displacement, shift_x) != 0,
+                0,
+                fq_rr,
+            )
+            fq_lr = dr.select(
+                dr.dot(displacement, shift_y) != 0,
+                0,
+                fq_lr,
+            )
+            fq_lr = dr.select(
+                dr.dot(displacement, shift_x) != 0,
+                0,
+                fq_lr,
+            )
+            fq_rl = dr.select(
+                dr.dot(displacement, shift_y) != 0,
+                0,
+                fq_rl,
+            )
+            fq_rl = dr.select(
+                dr.dot(displacement, shift_x) != 0,
+                0,
+                fq_rl,
+            )
+
+            accum += fq_ll * L_ll 
+            accum += fq_rr * L_rr
+            accum += fq_lr * L_lr
+            accum += fq_rl * L_rl
 
             return (accum, ArrayNi(index)), Bool(True)
 
