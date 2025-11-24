@@ -155,7 +155,9 @@ def xrt_struct_apply(
 
         H_n = dr.gather(ArrayNNf, ray_n_spec, i)
         ray_n = H_n @ uu
-
+        
+        # add a tilt in last dimension for testing
+        # ray_n = ray_n + 0.1 * dr.linspace(Float, -1.0, 1.0, ray_n.shape[-1])
         proj = xrt_apply(
             ray_spec=(ray_t, ray_n),
             knot_spec=knot_spec,
@@ -260,7 +262,7 @@ def xrt_struct_adjoint(
 
     i = UInt(0)
     index = dr.arange(UInt, 0, L_proj)
-    while i < N_proj:
+    while dr.hint(i < N_proj, mode='evaluated'):
         H_t = dr.gather(ArrayNNf, ray_t_spec, i)
         ray_t = H_t @ uu
 

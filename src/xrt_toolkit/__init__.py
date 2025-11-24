@@ -1,6 +1,6 @@
 import importlib.metadata
 
-__version__ = importlib.metadata.version("xrt_toolkit")
+# __version__ = importlib.metadata.version("xrt_toolkit")
 
 from .diagnostics import (
     plot_2d_basis as plot_2d_basis,
@@ -13,6 +13,10 @@ from .drjit.geometry import (
 from .drjit.ray_xrt import (
     xrt_adjoint as xrt_adjoint,
     xrt_apply as xrt_apply,
+    xrt_ad_t_x as xrt_ad_t_x,
+    xrt_ad_t_y as xrt_ad_t_y,
+    xrt_ad_n_x as xrt_ad_n_x,
+    xrt_ad_n_y as xrt_ad_n_y,
 )
 from .drjit.struct_xrt import (
     xrt_struct_adjoint as xrt_struct_adjoint,
