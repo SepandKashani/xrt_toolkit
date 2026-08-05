@@ -182,3 +182,4 @@ cupy/
 
 # Zip files
 *.zip
+xtk_experiments/usct_kwave_data.npz

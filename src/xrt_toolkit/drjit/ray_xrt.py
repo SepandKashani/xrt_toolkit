@@ -35,15 +35,67 @@ net = dnn.Sequential(
     dnn.Linear(16, 1)
 )
 net = net.alloc(dtype=TensorXf16, size=4, rng=rng_net)
-weights, net = dnn.pack(net, layout='training')
+_packed = dnn.pack(net, layout='training')
+if isinstance(_packed, tuple):  # drjit < 1.4 returns (weights, net)
+    weights, net = _packed
+else:  # drjit >= 1.4 returns the packed module; the buffer is shared
+    net = _packed
+    weights = net.layers[0].weights.buffer
 
-weights_path = Path('gpu_3D_spline_weights_drjit.npz')
+weights_path = Path(__file__).parent / 'gpu_3D_spline_weights_drjit.npz'
+if not weights_path.exists():  # legacy fallback: current working directory
+    weights_path = Path('gpu_3D_spline_weights_drjit.npz')
 saved = np.load(weights_path)['weights']
 weights[:] = Float16(saved)
-dr.print(f"Loaded weights from {weights_path.name}.")
 # -----------------------------------------------------
 
 eps = 1e-5
+
+_TOF_INV_SQRT2 = 0.7071067811865476
+_TOF_INV_SQRT2PI = 0.3989422804014327
+
+
+def _tof_setup(tof, ray_t, ray_n, bbox_ll, knot_step):
+    r"""
+    Build per-ray TOF weight evaluators from a :py:class:`~xrt_toolkit.util.TOFSpec`.
+
+    Returns ``(chord_weight, center_weight)``:
+
+    * ``chord_weight(index, p_a, p_b)``: integral of the normalized Gaussian
+      TOF kernel over the chord ``[p_a, p_b]`` of cell ``index``
+      (exact; used for order 0).
+    * ``center_weight(center)``: Gaussian TOF density evaluated at the
+      absolute grid position ``center`` of a basis function (orders >= 1).
+
+    Arc lengths are measured from the user-supplied ray anchor along the
+    normalized ray direction, in the length unit of `knot_spec`.
+    """
+    ArrayNf = type(ray_t)
+    Float = dr.value_t(ArrayNf)
+
+    center, sigma = (tof.center, tof.sigma) if hasattr(tof, "center") else tof
+    mu = Float(center)
+    inv_sigma = dr.rcp(Float(sigma))
+    n_hat = dr.normalize(ray_n)
+    t_user = ArrayNf(ray_t)  # snapshot: anchors before the bbox rewind
+
+    def alpha(p):  # arc length of grid position `p` from the user anchor
+        x = bbox_ll + p * knot_step
+        return dr.dot(x - t_user, n_hat)
+
+    def chord_weight(index, p_a, p_b):
+        z_a = (alpha(index + p_a) - mu) * inv_sigma
+        z_b = (alpha(index + p_b) - mu) * inv_sigma
+        return 0.5 * dr.abs(
+            dr.erf(z_b * _TOF_INV_SQRT2) - dr.erf(z_a * _TOF_INV_SQRT2)
+        )
+
+    def center_weight(center):
+        z = (alpha(center) - mu) * inv_sigma
+        return dr.exp(-0.5 * dr.square(z)) * inv_sigma * _TOF_INV_SQRT2PI
+
+    return chord_weight, center_weight
+
 
 def xrt_apply(
     ray_spec: RaySpecT,
@@ -51,6 +103,8 @@ def xrt_apply(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+    mode="symbolic",
+    tof=None,
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -119,6 +173,13 @@ def xrt_apply(
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
+    tof: TOFSpec | tuple[FloatT, FloatT] | None
+        Optional time-of-flight kernel ``(center, sigma)``.
+
+        When given, each line integral is weighted by a normalized Gaussian
+        of standard deviation `sigma` centered at arc length `center`,
+        measured from the anchor :math:`\bbt` along the normalized direction
+        :math:`\hat{\bbn}`. See :py:class:`~xrt_toolkit.util.TOFSpec`.
 
     Returns
     -------
@@ -163,6 +224,9 @@ def xrt_apply(
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
 
+    if tof is not None:
+        tof_chord_w, tof_center_w = _tof_setup(tof, ray_t, ray_n, bbox_ll, knot_step)
+
     if order == 0:
         state = (buffer,)
 
@@ -178,7 +242,10 @@ def xrt_apply(
 
             offset = dr.dot(index, stride)
             fq = dr.gather(Float, data, offset, active)
-            L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            if tof is None:
+                L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            else:
+                L = tof_chord_w(ArrayNf(index), p_a, p_b) * dr.rcp(dr.prod(knot_step))
             accum += fq * L
 
             return (accum,), Bool(True)
@@ -218,6 +285,8 @@ def xrt_apply(
                 cell_center = ArrayNf(0.5, 0.5) + shift
                 x = dr.dot(n_perp, knot_step * (cell_center - p_a))
                 L = box_spline_1d_dr(E, E_mask, x)
+                if tof is not None:
+                    L = L * tof_center_w(ArrayNf(index) + cell_center)
 
                 return (fq, L)
 
@@ -284,7 +353,9 @@ def xrt_apply(
                 y = dr.dot(n_perp_x, knot_step * (cell_center - p_a)) # vertical position of detector
 
                 L = spline_3d_dr(net, x, y, n)
-                
+                if tof is not None:
+                    L = L * tof_center_w(ArrayNf(index) + cell_center)
+
                 return (fq, L)
 
             (fq_mlr, L_mlr) = process_shift(shift_m)
@@ -428,7 +499,7 @@ def xrt_apply(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -441,6 +512,8 @@ def xrt_adjoint(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+    mode="symbolic",
+    tof=None,
 ) -> FloatT:
     r"""
     Compute 2D/3D back-projections.
@@ -462,6 +535,10 @@ def xrt_adjoint(
         (L,) projections :math:`g_{l} \in \bR`.
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
+    tof: TOFSpec | tuple[FloatT, FloatT] | None
+        Optional time-of-flight kernel ``(center, sigma)``, identical to the
+        `tof` parameter of :py:func:`xrt_apply`. When given, the operator is
+        the exact adjoint of the TOF-weighted forward projection.
 
     Returns
     -------
@@ -505,6 +582,9 @@ def xrt_adjoint(
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
 
+    if tof is not None:
+        tof_chord_w, tof_center_w = _tof_setup(tof, ray_t, ray_n, bbox_ll, knot_step)
+
     if order == 0:
         state = (buffer,)
 
@@ -519,7 +599,10 @@ def xrt_adjoint(
             (accum,) = state
 
             offset = dr.dot(index, stride)
-            L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            if tof is None:
+                L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            else:
+                L = tof_chord_w(ArrayNf(index), p_a, p_b) * dr.rcp(dr.prod(knot_step))
             dr.scatter_add(accum, L * data, offset, active)
 
             return (accum,), Bool(True)
@@ -558,6 +641,8 @@ def xrt_adjoint(
                 cell_center = ArrayNf(0.5, 0.5) + shift
                 x = dr.dot(n_perp, knot_step * (cell_center - p_a))
                 L = box_spline_1d_dr(E, E_mask, x)
+                if tof is not None:
+                    L = L * tof_center_w(ArrayNf(index) + cell_center)
 
                 return (L, offset, active)
 
@@ -623,7 +708,9 @@ def xrt_adjoint(
                 y = dr.dot(n_perp_x, knot_step * (cell_center - p_a)) # vertical position of detector
 
                 L = spline_3d_dr(net, x, y, n)
-                
+                if tof is not None:
+                    L = L * tof_center_w(ArrayNf(index) + cell_center)
+
                 return (L, offset, active)
 
             (L_mlr, offset_mlr, active_mlr) = process_shift(shift_m)
@@ -757,7 +844,7 @@ def xrt_adjoint(
         func=back_project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -770,6 +857,7 @@ def xrt_ad_t_x_(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -939,7 +1027,7 @@ def xrt_ad_t_x_(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -951,6 +1039,7 @@ def xrt_ad_t_x(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -1151,7 +1240,7 @@ def xrt_ad_t_x(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -1165,6 +1254,7 @@ def xrt_ad_t_y_(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -1335,7 +1425,7 @@ def xrt_ad_t_y_(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -1348,6 +1438,7 @@ def xrt_ad_t_y(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -1548,7 +1639,7 @@ def xrt_ad_t_y(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -1569,6 +1660,7 @@ def xrt_ad_n_x_(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -1758,7 +1850,7 @@ def xrt_ad_n_x_(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -1770,6 +1862,7 @@ def xrt_ad_n_x(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -1973,7 +2066,7 @@ def xrt_ad_n_x(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -1985,6 +2078,7 @@ def xrt_ad_n_y_(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -2174,7 +2268,7 @@ def xrt_ad_n_y_(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 
@@ -2186,6 +2280,7 @@ def xrt_ad_n_y(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+mode = "symbolic"
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -2389,7 +2484,7 @@ def xrt_ad_n_y(
         func=project,
         state=state,
         active=active,
-        mode="symbolic",
+        mode=mode,
         max_iterations=-1,
     )
 

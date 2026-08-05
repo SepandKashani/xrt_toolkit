@@ -1,20 +1,20 @@
 [build-system]
 requires = [
     "hatchling",
-    "hatch-vcs",
 ]
 build-backend = "hatchling.build"
 
 # Metadata ====================================================================
 [project]
 name = "xrt_toolkit"
-dynamic = ["version"]
+version = "2.0.0"
 description = "Collection of utilities to compute X-Ray Transforms."
 readme = "README.rst"
 requires-python = ">= 3.10, < 3.14"
 license = "MIT"
 authors = [
     { name = "S. Kashani", email = "sepand@kashani.ch" },
+    { name = "Y. Haouchat", email = "youssef.haouchat@epfl.ch" },
 ]
 classifiers = [
     "Topic :: Scientific/Engineering",
@@ -55,10 +55,6 @@ dev = [
 all = [
     "xrt_toolkit[viz,dev]",
 ]
-
-# Get version info from Git ===================================================
-[tool.hatch.version]
-source = "vcs"
 
 # sdist/wheel config ==========================================================
 [tool.hatch.build]

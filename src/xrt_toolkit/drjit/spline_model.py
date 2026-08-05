@@ -150,7 +150,12 @@ def load_spline_network(
             "No PyTorch checkpoint provided or found at the default location."
         )
 
-    weights, net = dnn.pack(net, layout="training")
+    _packed = dnn.pack(net, layout="training")
+    if isinstance(_packed, tuple):  # drjit < 1.4 returns (weights, net)
+        weights, net = _packed
+    else:  # drjit >= 1.4 returns the packed module; the buffer is shared
+        net = _packed
+        weights = net.layers[0].weights.buffer
 
     ckpt_npz: Optional[Path] = Path(drjit_checkpoint) if drjit_checkpoint else None
     if ckpt_npz is None and _DEFAULT_DRJIT_CKPT.exists():

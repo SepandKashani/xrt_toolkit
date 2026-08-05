@@ -3,6 +3,9 @@ authors:
   - family-names: Kashani
     given-names: Sepand
     orcid: "https://orcid.org/0000-0002-0735-371X"
+  - family-names: Haouchat
+    given-names: Youssef
+    email: youssef.haouchat@epfl.ch
 cff-version: 1.2.0
 keywords:
   - X-Ray Transform

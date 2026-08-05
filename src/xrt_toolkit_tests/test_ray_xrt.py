@@ -1,192 +1,168 @@
+"""
+Tests for the core scalar operators in ``xrt_toolkit.drjit.ray_xrt`` and the
+geometry derivatives in ``xrt_toolkit.drjit.ray_xrt_new``.
+
+Requires a CUDA device (the drjit backend of the library).
+"""
+
 import numpy as np
 import pytest
 
-import xrt_toolkit.util as xtk_util
-import xrt_toolkit_tests.conftest as ct
-from xrt_toolkit.array_module import CUPY_ENABLED, NDArrayInfo
-from xrt_toolkit.ray_xrt import RayXRT
+drjit = pytest.importorskip("drjit")
+import drjit as dr  # noqa: E402
+
+try:
+    from drjit.cuda.ad import Array2f, Array3f, Float  # noqa: E402
+
+    dr.width(Float(0.0))  # touch the backend
+    CUDA_OK = True
+except Exception:
+    CUDA_OK = False
+
+pytestmark = pytest.mark.skipif(not CUDA_OK, reason="CUDA backend unavailable")
+
+import xrt_toolkit as xtk  # noqa: E402
 
 
-class TestRayXRT:
-    @pytest.mark.parametrize("stack_shape", [(), (1,), (5, 3, 4)])
-    def test_value_apply(self, op, dtype, stack_shape):
-        # output value matches ground truth.
-        translate = xtk_util.TranslateDType(dtype)
-        fdtype = translate.to_float()
+def _rays(D, N, L, rng):
+    t = rng.uniform(4, N - 4, (D, L)).astype(np.float32)
+    n = rng.normal(size=(D, L)).astype(np.float32)
+    n /= np.linalg.norm(n, axis=0)
+    A = Array2f if D == 2 else Array3f
+    return (A(t), A(n))
 
-        # Generate RayXRT input/output (ground-truth)
-        rng = np.random.default_rng()
-        a = rng.standard_normal((*stack_shape, *op.cfg.N))  # (..., N1,...,ND)
-        a = a.astype(fdtype)
-        b_gt = []
-        for axis in range(op.cfg.D):
-            p = np.sum(a * op.cfg.pitch[axis], axis=len(stack_shape) + axis)
-            b_gt.append(p.reshape(*stack_shape, -1))
-        b_gt = np.concatenate(b_gt, axis=-1)  # (..., N_ray)
 
-        # Test RayXRT compliance
-        b = op.apply(a)
-        assert b.shape == b_gt.shape
-        assert ct.allclose(b, b_gt, np.single)
+def _maxrel(a, b):
+    a, b = np.asarray(a), np.asarray(b)
+    return np.abs(a - b).max() / (np.abs(a).max() + 1e-12)
 
-    @pytest.mark.parametrize("direction", ["apply", "adjoint"])
-    def test_prec(self, op, dtype, direction):
-        # output precision is always FP32, i.e. RayXRT's internal precision.
-        translate = xtk_util.TranslateDType(dtype)
-        fdtype = translate.to_float()
 
-        rng = np.random.default_rng()
-        if direction == "apply":
-            a = rng.standard_normal(op.cfg.N).astype(fdtype)
-        else:
-            a = rng.standard_normal(op.cfg.N_ray).astype(fdtype)
+# ------------------------------------------------------------- forward -------
+@pytest.mark.parametrize("D,N", [(2, 64), (3, 24)])
+def test_constant_volume_chord(D, N):
+    # On a constant volume the order-0 transform returns the chord length of
+    # the ray inside the lattice bounding box.  Check axis-aligned rays whose
+    # chord is known exactly.
+    knot = xtk.UniformSpec(start=0, step=1, num=(N,) * D)
+    L = 32
+    t = np.full((D, L), N / 2, dtype=np.float32)
+    t[1] = np.linspace(8, N - 8, L)
+    n = np.zeros((D, L), dtype=np.float32)
+    n[0] = 1.0
+    A = Array2f if D == 2 else Array3f
+    vol = Float(np.ones(N**D, dtype=np.float32))
+    y = np.asarray(xtk.xrt_apply((A(t), A(n)), knot, 0, vol, mode="evaluated"))
+    assert np.abs(y - N).max() / N < 1e-5
 
-        f = getattr(op, direction)
-        b = f(a)
-        assert b.dtype == np.dtype(op.fdtype)
 
-    def test_math_adjoint(self, op, dtype):
-        # <A x, y> == <x, A^H y>
-        translate = xtk_util.TranslateDType(dtype)
-        fdtype = translate.to_float()
+@pytest.mark.parametrize("D,N", [(2, 64), (3, 24)])
+@pytest.mark.parametrize("order", [0, 1, 2])
+def test_forward_linear(D, N, order):
+    # A(f + a g) == A(f) + a A(g).
+    rng = np.random.default_rng(3)
+    knot = xtk.UniformSpec(start=0, step=1, num=(N,) * D)
+    ray = _rays(D, N, 200, rng)
+    f = Float(rng.random(N**D, dtype=np.float32))
+    g = Float(rng.random(N**D, dtype=np.float32))
 
-        sh = (5, 3, 4)
-        rng = np.random.default_rng()
-        a = rng.standard_normal((*sh, *op.cfg.N))
-        a = a.astype(fdtype)
-        b = rng.standard_normal((*sh, op.cfg.N_ray))
-        b = b.astype(fdtype)
+    y_sum = xtk.xrt_apply(ray, knot, order, f + 2.5 * g, mode="evaluated")
+    y_lin = (np.asarray(xtk.xrt_apply(ray, knot, order, f, mode="evaluated"))
+             + 2.5 * np.asarray(xtk.xrt_apply(ray, knot, order, g, mode="evaluated")))
+    assert _maxrel(y_sum, y_lin) < 1e-5
 
-        lhs = ct.inner_product(op.apply(a), b, 1)
-        rhs = ct.inner_product(a, op.adjoint(b), op.cfg.D)
-        assert ct.allclose(lhs, rhs, op.fdtype)
 
-    @pytest.mark.parametrize("stack_shape", [(), (1,), (5, 3, 4)])
-    @pytest.mark.parametrize("direction", ["apply", "adjoint"])
-    def test_cupy(
-        self,
-        origin,
-        pitch,
-        N,
-        nt_spec,
-        dtype,
-        # -----------------------------
-        stack_shape,
-        direction,
-    ):
-        # CuPy backend produces same results as NumPy backend.
-        ndi = NDArrayInfo.CUPY
-        if not CUPY_ENABLED:
-            pytest.skip(f"Unsupported backend {ndi}.")
-        cp = ndi.module()
+@pytest.mark.parametrize("D,N", [(2, 64), (3, 24)])
+@pytest.mark.parametrize("order", [0, 1, 2])
+def test_adjoint_dot(D, N, order):
+    # <A f, y> == <f, A^T y> (non-negative operands keep fp32 cancellation
+    # benign; tolerance covers atomic-order variation).
+    rng = np.random.default_rng(1)
+    L = 500
+    knot = xtk.UniformSpec(start=0, step=1, num=(N,) * D)
+    ray = _rays(D, N, L, rng)
+    f = Float(rng.random(N**D, dtype=np.float32))
+    y = Float(rng.random(L, dtype=np.float32))
 
-        op_gt = RayXRT(
-            origin=origin,
-            pitch=pitch,
-            N=N,
-            n_spec=nt_spec[0],
-            t_spec=nt_spec[1],
-        )
-        op_cp = RayXRT(
-            origin=origin,
-            pitch=pitch,
-            N=N,
-            n_spec=cp.asarray(nt_spec[0]),
-            t_spec=cp.asarray(nt_spec[1]),
-        )
+    Af = np.asarray(xtk.xrt_apply(ray, knot, order, f, mode="evaluated"), np.float64)
+    Aty = np.asarray(xtk.xrt_adjoint(ray, knot, order, y, mode="evaluated"), np.float64)
+    d1 = float(Af @ np.asarray(y, np.float64))
+    d2 = float(np.asarray(f, np.float64) @ Aty)
+    assert abs(d1 - d2) / abs(d1) < 5e-4
 
-        rng = np.random.default_rng()
-        if direction == "apply":
-            a = rng.standard_normal((*stack_shape, *op_gt.cfg.N), dtype=dtype)
-            b_gt = op_gt.apply(a)
-            b_cp = op_cp.apply(cp.asarray(a))
-        else:  # "adjoint"
-            a = rng.standard_normal((*stack_shape, op_gt.cfg.N_ray), dtype)
-            b_gt = op_gt.adjoint(a)
-            b_cp = op_cp.adjoint(cp.asarray(a))
 
-        assert NDArrayInfo.from_obj(b_cp) == ndi
-        assert b_cp.shape == b_gt.shape
-        assert b_cp.dtype == b_gt.dtype
-        assert ct.allclose(b_cp.get(), b_gt, op_gt.fdtype)
+@pytest.mark.parametrize("order", [0, 1, 2])
+def test_symbolic_matches_evaluated(order):
+    rng = np.random.default_rng(2)
+    N, L = 64, 300
+    knot = xtk.UniformSpec(start=0, step=1, num=(N, N))
+    ray = _rays(2, N, L, rng)
+    f = Float(rng.random(N * N, dtype=np.float32))
+    y_e = xtk.xrt_apply(ray, knot, order, f, mode="evaluated")
+    y_s = xtk.xrt_apply(ray, knot, order, f, mode="symbolic")
+    assert _maxrel(y_e, y_s) < 1e-6
 
-    # Fixtures ----------------------------------------------------------------
-    @pytest.fixture(params=[2, 3])
-    def space_dim(self, request) -> int:
-        # space dimension D
-        return request.param
 
-    @pytest.fixture
-    def origin(self, space_dim) -> tuple[float]:
-        # Volume origin
-        rng = np.random.default_rng()
-        orig = rng.standard_normal(space_dim)
-        return tuple(orig)
+# ------------------------------------------- geometry derivatives (AD) -------
+def _fd_median_rel(fn_val, fn_grad, h=1e-2):
+    """Median relative deviation between the AD gradient and central FD."""
+    g_ad = np.asarray(fn_grad(), np.float64)
+    g_fd = (np.asarray(fn_val(+h), np.float64)
+            - np.asarray(fn_val(-h), np.float64)) / (2 * h)
+    keep = np.abs(g_fd) > 1e-3 * np.abs(g_fd).max()
+    rel = np.abs(g_ad[keep] - g_fd[keep]) / np.abs(g_fd[keep])
+    return float(np.median(rel))
 
-    @pytest.fixture
-    def pitch(self, space_dim) -> tuple[float]:
-        # Voxel pitch
-        rng = np.random.default_rng()
-        pitch = rng.uniform(1e-3, 1, space_dim)
-        return tuple(pitch)
 
-    @pytest.fixture
-    def N(self, space_dim) -> tuple[float]:
-        if space_dim == 2:
-            return (5, 6)
-        else:
-            return (5, 3, 4)
+def _smooth_volume(D, N):
+    ax = np.stack(np.meshgrid(*(np.arange(N),) * D, indexing="ij"))
+    r2 = sum((a - N / 2) ** 2 for a in ax)
+    return Float(np.exp(-r2 / (0.1 * N * N)).reshape(-1).astype(np.float32))
 
-    @pytest.fixture
-    def nt_spec(self, origin, pitch, N) -> tuple[np.ndarray]:
-        # To analytically test XRT correctness, we cast rays only along cardinal X/Y/Z directions,
-        # with one ray per voxel side.
 
-        D = len(N)
-        n_spec = []
-        t_spec = []
-        for axis in range(D):
-            # compute axes which are not projected
-            dim = list(range(D))
-            dim.pop(axis)
+@pytest.mark.parametrize("D,N,order", [(2, 64, 1), (2, 64, 2), (3, 24, 0)])
+def test_ad_t_matches_fd(D, N, order):
+    # d/d(t_x): AD against central finite differences on a smooth volume.
+    # fp32 + FD noise: require median agreement within 5%.
+    rng = np.random.default_rng(4)
+    L = 400
+    knot = xtk.UniformSpec(start=0, step=1, num=(N,) * D)
+    vol = _smooth_volume(D, N)
+    t0 = rng.uniform(4, N - 4, (D, L)).astype(np.float32)
+    n = rng.normal(size=(D, L)).astype(np.float32)
+    n /= np.linalg.norm(n, axis=0)
+    A = Array2f if D == 2 else Array3f
 
-            # number of rays per dimension
-            N_ray = np.array(N)[dim]
+    def val(eps):
+        t = t0.copy()
+        t[0] += eps
+        return xtk.xrt_apply((A(t), A(n)), knot, order, vol, mode="evaluated")
 
-            n = np.zeros((*N_ray, D))
-            n[..., axis] = 1
-            n_spec.append(n.reshape(-1, D))
+    def grad():
+        return xtk.xrt_ad_t_x((A(t0), A(n)), knot, order, vol, mode="evaluated")
 
-            t = np.zeros((*N_ray, D))
-            _t = np.meshgrid(
-                *[(np.arange(N[d]) + 0.5) * pitch[d] + origin[d] for d in dim],
-                indexing="ij",
-            )
-            _t = np.stack(_t, axis=-1)
-            t[..., dim] = _t
-            t_spec.append(t.reshape(-1, D))
+    assert _fd_median_rel(val, grad) < 0.05
 
-        n_spec = np.concatenate(n_spec, axis=0)
-        t_spec = np.concatenate(t_spec, axis=0)
-        return n_spec, t_spec
 
-    @pytest.fixture(
-        params=[
-            np.float32,
-            np.float64,
-        ]
-    )
-    def dtype(self, request) -> np.dtype:
-        # FP precision of inputs.
-        # Correctness tests are performed in single-precision due to drjit constraints.
-        return np.dtype(request.param)
+@pytest.mark.parametrize("order", [1, 2])
+def test_ad_n_matches_fd(order):
+    # d/d(n_x) in 2D.  This is the derivative fixed in v2: the AD callback
+    # must differentiate local copies of the loop state.
+    rng = np.random.default_rng(5)
+    N, L = 64, 400
+    knot = xtk.UniformSpec(start=0, step=1, num=(N, N))
+    vol = _smooth_volume(2, N)
+    t = rng.uniform(4, N - 4, (2, L)).astype(np.float32)
+    n0 = rng.normal(size=(2, L)).astype(np.float32)
+    n0 /= np.linalg.norm(n0, axis=0)
 
-    @pytest.fixture
-    def op(self, origin, pitch, N, nt_spec) -> RayXRT:
-        return RayXRT(
-            origin=origin,
-            pitch=pitch,
-            N=N,
-            n_spec=nt_spec[0],
-            t_spec=nt_spec[1],
-        )
+    def val(eps):
+        n = n0.copy()
+        n[0] += eps
+        return xtk.xrt_apply((Array2f(t), Array2f(n)), knot, order, vol,
+                             mode="evaluated")
+
+    def grad():
+        return xtk.xrt_ad_n_x((Array2f(t), Array2f(n0)), knot, order, vol,
+                              mode="evaluated")
+
+    assert _fd_median_rel(val, grad) < 0.05

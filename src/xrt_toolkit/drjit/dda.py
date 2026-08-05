@@ -259,27 +259,8 @@ def dda(
         state=(active, state, dt_v, p0, pi, t_max),
         body=body_fn,
         cond=lambda *args: args[0],
-        mode="symbolic",
+        mode=mode,
         labels=("active", "state", "dt_v", "p1", "pi", "t_rem"),
         max_iterations=-1,
     )[1]
 
-
-    
-    
-    
-    i = UInt(0)
-    while dr.hint(i < 2*200, mode="symbolic"):
-        dt = dr.minimum(dr.min(dt_v), t_max)
-        mask = dt_v == dt
-        p1 = dr.fma(ray_d, dt, p0)
-        state, cont = func(state, ArrayNu(pi), p0, p1, active & (dt > 0))  # type: ignore
-        abs_rcp_d2 = abs_rcp_d #dr.gather(ArrayNf, abs_rcp_d, dr.arange(UInt32, dr.width(abs_rcp_d)), shape=(3,))
-        dt_v[active] = dr.select(mask, abs_rcp_d2, dt_v - dt)
-        p0[active] = dr.fma(ray_d, dt, p0)
-        p0[mask & active] = dr.select(ray_d >= 0, Float(0), Float(1))
-        pi[mask & active] += step
-        t_max[active] = t_max - dt
-        active[active] &= dr.all((pi >= 0) & (pi < ArrayNi(grid_res))) & (t_max > 0) & cont
-        i += 1
-    return state
