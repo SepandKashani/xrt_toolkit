@@ -48,9 +48,10 @@ def _psnr(rec, ref):
 def test_cg():
     ph, _ = _phantom()
     rays, knot = _parallel_scan()
-    y = xtk.xrt_struct_apply(rays, knot, 0, Float(ph.reshape(-1)))
-    A = lambda v: xtk.xrt_struct_apply(rays, knot, 0, v)
-    At = lambda v: xtk.xrt_struct_adjoint(rays, knot, 0, v)
+    re = xtk.struct_rays(rays)
+    y = xtk.xrt_apply(re, knot, 0, Float(ph.reshape(-1)))
+    A = lambda v: xtk.xrt_apply(re, knot, 0, v)
+    At = lambda v: xtk.xrt_adjoint(re, knot, 0, v)
     rec = xtk.cg(A, At, y, N * N, n_iter=30)
     assert _psnr(rec, ph) > 30
 
@@ -58,11 +59,30 @@ def test_cg():
 def test_gd():
     ph, _ = _phantom()
     rays, knot = _parallel_scan()
-    y = xtk.xrt_struct_apply(rays, knot, 0, Float(ph.reshape(-1)))
-    A = lambda v: xtk.xrt_struct_apply(rays, knot, 0, v)
-    At = lambda v: xtk.xrt_struct_adjoint(rays, knot, 0, v)
+    re = xtk.struct_rays(rays)
+    y = xtk.xrt_apply(re, knot, 0, Float(ph.reshape(-1)))
+    A = lambda v: xtk.xrt_apply(re, knot, 0, v)
+    At = lambda v: xtk.xrt_adjoint(re, knot, 0, v)
     rec = xtk.gd(A, At, y, N * N, n_iter=150)
     assert _psnr(rec, ph) > 25
+
+
+def test_struct_rays_matches_struct_apply():
+    # expanding a structured scan must reproduce the structured operator
+    # exactly (same rays, same projection-major ordering)
+    ph, _ = _phantom()
+    f = Float(ph.reshape(-1))
+    rays, knot = _parallel_scan()
+    y_s = np.asarray(xtk.xrt_struct_apply(rays, knot, 1, f))
+    y_e = np.asarray(xtk.xrt_apply(xtk.struct_rays(rays), knot, 1, f))
+    assert np.abs(y_s - y_e).max() < 1e-4 * np.abs(y_s).max()
+
+    cone = xtk.cone_beam(sod=1.6 * N, sdd=2.8 * N,
+                         angles=dr.linspace(Float, 0, 2 * np.pi, 60, endpoint=False),
+                         detector_spec=xtk.DetectorSpec(size=(2.2 * N,), num_cell=(64,)))
+    y_s = np.asarray(xtk.xrt_struct_apply(cone, knot, 0, f))
+    y_e = np.asarray(xtk.xrt_apply(xtk.struct_rays(cone), knot, 0, f))
+    assert np.abs(y_s - y_e).max() < 1e-4 * np.abs(y_s).max()
 
 
 def test_fbp_2d():

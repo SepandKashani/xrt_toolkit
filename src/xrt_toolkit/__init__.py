@@ -9,6 +9,7 @@ from .diagnostics import (
 from .drjit.geometry import (
     cone_beam as cone_beam,
     parallel_beam as parallel_beam,
+    struct_rays as struct_rays,
 )
 from .drjit.ray_xrt import (
     xrt_adjoint as xrt_adjoint,

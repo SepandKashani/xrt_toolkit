@@ -171,3 +171,47 @@ def cone_beam(
     Array = dr.array_t(ray_t_spec)
     ray_spec = (Array(ray_t_spec), Array(ray_n_spec), ray_u_spec)
     return ray_spec
+
+
+def struct_rays(ray_spec):
+    r"""
+    Expand a structured scan into explicit per-ray ``(t, n)`` arrays.
+
+    The structured operators (:py:func:`~xrt_toolkit.xrt_struct_apply` /
+    :py:func:`~xrt_toolkit.xrt_struct_adjoint`) process one projection per
+    kernel launch, which keeps memory use flat but costs hundreds of launches
+    per call. The explicit operators (:py:func:`~xrt_toolkit.xrt_apply` /
+    :py:func:`~xrt_toolkit.xrt_adjoint`) trace all rays in a single fused
+    kernel and are the right choice inside iterative solvers. This helper
+    converts the former representation into the latter; both produce rays in
+    the same order, so measurement vectors are interchangeable.
+
+    Parameters
+    ----------
+    ray_spec: RaySpecT
+        Structured scan from :py:func:`parallel_beam` or :py:func:`cone_beam`.
+
+    Returns
+    -------
+    rays: tuple[ArrayNfT, ArrayNfT]
+        Explicit ``(t, n)``, one entry per (projection, detector cell) in
+        projection-major order.
+    """
+    ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
+    ArrayNNf = type(ray_t_spec)
+    ArrayNf = dr.value_t(ArrayNNf)
+    Float = dr.value_t(ArrayNf)
+    UInt = dr.value_t(dr.uint32_array_t(ArrayNf))
+
+    N_proj = dr.width(ray_t_spec)
+    u = [start + step * dr.arange(Float, num)
+         for (start, step, num) in ray_u_spec]
+    uu = ArrayNf(*dr.meshgrid(*u, indexing="ij"))
+    L_proj = dr.width(uu)
+
+    # replicate: projection index varies slowest, detector cells fastest
+    idx = dr.arange(UInt, N_proj * L_proj)
+    H_t = dr.gather(ArrayNNf, ray_t_spec, idx // L_proj)
+    H_n = dr.gather(ArrayNNf, ray_n_spec, idx // L_proj)
+    uu_rep = dr.gather(ArrayNf, uu, idx % L_proj)
+    return (H_t @ uu_rep, H_n @ uu_rep)
