@@ -5,8 +5,15 @@ Iterative solvers (:py:func:`cg`, :py:func:`gd`) take the forward/adjoint pair
 as callables, so they work with any geometry interface of the library.
 Analytic methods (:py:func:`fbp`, :py:func:`fbp_cone`, :py:func:`bpf`) operate
 on structured scans built with :py:func:`~xrt_toolkit.parallel_beam` /
-:py:func:`~xrt_toolkit.cone_beam`; filtering runs on the CPU with NumPy FFTs,
-projection and backprojection on the GPU.
+:py:func:`~xrt_toolkit.cone_beam`.
+
+Everything runs on the GPU: backprojections go through the fused explicit-ray
+kernels (:py:func:`~xrt_toolkit.struct_rays`), and Fourier filtering uses CuPy
+FFTs on the same device memory as the Dr.Jit arrays (zero-copy through DLPack).
+If CuPy is not installed, filtering transparently falls back to NumPy on the
+host. Filters follow the standard discrete recipes (Kak & Slaney kernel built
+periodically on the padded grid, real FFTs, fast transform lengths, the usual
+window family) and are cached across calls.
 
 All scaling constants assume the lattice ``step`` and detector units are the
 same (the usual voxel-unit convention), angles uniformly spaced over
@@ -17,10 +24,18 @@ import numpy as np
 
 import drjit as dr
 
+from .drjit.geometry import struct_rays
 from .drjit.ray_xrt import xrt_adjoint, xrt_apply  # noqa: F401
-from .drjit.struct_xrt import xrt_struct_adjoint, xrt_struct_apply
 
 __all__ = ["cg", "gd", "fbp", "fbp_cone", "bpf"]
+
+try:  # probe with a real transform: a CuPy whose cuFFT library cannot be
+    # loaded (mismatched CUDA versions) must degrade to the NumPy path, not
+    # crash at the first reconstruction.
+    import cupy as _cp
+    _cp.fft.rfft(_cp.ones(4, dtype=_cp.float32))
+except Exception:
+    _cp = None
 
 
 # ------------------------------------------------------------- iterative ----
@@ -33,6 +48,9 @@ def cg(A, At, y, n_unknowns, n_iter=30, x0=None):
     A, At: callable
         Forward and adjoint operators, e.g.
         ``lambda v: xrt_apply(rays, knot, order, v)`` and its adjoint.
+        For structured scans expand the geometry once with
+        :py:func:`~xrt_toolkit.struct_rays` and use the explicit operators;
+        the structured ones launch one kernel per projection per call.
     y: FloatT
         Measurements.
     n_unknowns: int
@@ -99,22 +117,73 @@ def gd(A, At, y, n_unknowns, n_iter=100, step=None, x0=None):
     return f
 
 
-# -------------------------------------------------------------- analytic ----
-def _ramlak(n_det, du, window):
-    # Discrete Ram-Lak kernel (Kak & Slaney), returned as its DFT on a
-    # 4*n_det grid.  Using the DFT of the space-domain kernel (rather than
-    # |f| directly) avoids the DC bias of the naive ramp.
-    n = np.arange(-n_det, n_det + 1)
-    h = np.zeros(n.shape, np.float64)
-    h[n == 0] = 1.0 / (4 * du * du)
-    odd = (n % 2) != 0
-    h[odd] = -1.0 / (np.pi**2 * n[odd] ** 2 * du * du)
-    L = 4 * n_det
-    H = np.fft.fft(np.roll(np.pad(h, (0, L - len(h))), -n_det))
+# ----------------------------------------------------- GPU FFT machinery ----
+def _dev(x):
+    """Dr.Jit array -> device array (CuPy view, zero copy) or NumPy array."""
+    if _cp is not None:
+        return _cp.from_dlpack(x)
+    return np.asarray(x)
+
+
+def _xp():
+    return _cp if _cp is not None else np
+
+
+def _fast_len(n):
+    try:
+        import scipy.fft
+        return scipy.fft.next_fast_len(n)
+    except ImportError:
+        return 1 << (n - 1).bit_length()
+
+
+_filter_cache = {}
+
+
+def _ramp_rfft(n_det, du, window):
+    r"""
+    rfft of the discrete Ram-Lak kernel on the padded grid, times the window.
+
+    The kernel is built periodically on the padded length (as in
+    scikit-image's ``iradon``) rather than truncated, which keeps its DC
+    exactly zero; the padded length is at least ``2 * n_det`` against
+    circular-convolution wrap-around, rounded up to an FFT-friendly size.
+    Windows use the normalized frequency :math:`w \in [0, 1]` (1 = Nyquist).
+    """
+    key = (n_det, float(du), window, _cp is None)
+    H = _filter_cache.get(key)
+    if H is not None:
+        return H
+    xp = _xp()
+    L = _fast_len(2 * n_det)
+    h = xp.zeros(L, dtype=xp.float64)
+    h[0] = 1.0 / (4 * du * du)
+    k = xp.arange(1, L // 2 + 1, 2)
+    h[k] = -1.0 / (np.pi * k * du) ** 2
+    h[-k] = -1.0 / (np.pi * k * du) ** 2
+    H = xp.fft.rfft(h).real
+    w = xp.arange(L // 2 + 1) / (L / 2)  # 0..1, 1 = Nyquist
     if window == "hann":
-        f = np.fft.fftfreq(L)
-        H = H * (0.5 + 0.5 * np.cos(2 * np.pi * f))
-    return H
+        H = H * (0.5 + 0.5 * xp.cos(np.pi * w))
+    elif window == "hamming":
+        H = H * (0.54 + 0.46 * xp.cos(np.pi * w))
+    elif window == "cosine":
+        H = H * xp.cos(np.pi * w / 2)
+    elif window == "shepp-logan":
+        H = H * xp.where(w > 0, xp.sin(np.pi * w / 2) / xp.maximum(np.pi * w / 2, 1e-12), 1.0)
+    elif window not in (None, "ramp"):
+        raise ValueError(f"unknown window {window!r}")
+    H = H.astype(xp.float32)
+    _filter_cache[key] = (L, H)
+    return L, H
+
+
+def _filter_last_axis(yd, n_det, du, window):
+    """Ramp-filter a device array along its last axis (real FFTs, padded)."""
+    xp = _xp()
+    L, H = _ramp_rfft(n_det, du, window)
+    q = xp.fft.irfft(xp.fft.rfft(yd, n=L, axis=-1) * H, n=L, axis=-1)
+    return q[..., :n_det].astype(xp.float32)
 
 
 def _struct_meta(ray_spec):
@@ -125,12 +194,15 @@ def _struct_meta(ray_spec):
     return n_ang, num, du
 
 
-def _filter_rows(y2, H, n_det):
-    L = H.shape[0]
-    q = np.real(np.fft.ifft(np.fft.fft(y2, L, axis=-1) * H, axis=-1))
-    return np.ascontiguousarray(q[..., :n_det], np.float32)
+def _adjoint_explicit(ray_spec, knot_spec, order, q, Float):
+    """Backproject a device array through the fused explicit-ray kernel."""
+    xp = _xp()
+    rays = struct_rays(ray_spec)
+    return xrt_adjoint(rays, knot_spec, order,
+                       Float(xp.ascontiguousarray(q.reshape(-1))))
 
 
+# -------------------------------------------------------------- analytic ----
 def fbp(ray_spec, knot_spec, y, order=0, window="hann"):
     r"""
     Filtered backprojection for :py:func:`~xrt_toolkit.parallel_beam` scans.
@@ -143,8 +215,8 @@ def fbp(ray_spec, knot_spec, y, order=0, window="hann"):
     ray_spec:
         Structured scan from :py:func:`~xrt_toolkit.parallel_beam`.
     y: FloatT
-        Measurements from :py:func:`~xrt_toolkit.xrt_struct_apply`.
-    window: "hann" | None
+        Measurements from either projection interface (same ray ordering).
+    window: "hann" | "hamming" | "cosine" | "shepp-logan" | "ramp" | None
         Smoothing window on the ramp filter.
 
     Returns
@@ -154,14 +226,14 @@ def fbp(ray_spec, knot_spec, y, order=0, window="hann"):
     Float = type(y)
     n_ang, num, du = _struct_meta(ray_spec)
     n_det = num[0]  # in-plane detector axis (parallel_beam convention)
-    yn = np.asarray(y, np.float64).reshape(n_ang, *num)
-    if len(num) == 2:  # 3D: filter along axis 1 (in-plane), keep axis 2
-        yn = np.moveaxis(yn, 2, 1)
-    q = _filter_rows(yn, _ramlak(n_det, du, window), n_det)
+    xp = _xp()
+    yd = _dev(y).reshape(n_ang, *num)
+    if len(num) == 2:  # 3D: filter along the in-plane axis, keep the axial one
+        yd = xp.ascontiguousarray(xp.moveaxis(yd, 2, 1))
+    q = _filter_last_axis(yd, n_det, du, window)
     if len(num) == 2:
-        q = np.moveaxis(q, 1, 2)
-    b = xrt_struct_adjoint(ray_spec, knot_spec, order,
-                           Float(np.ascontiguousarray(q.reshape(-1))))
+        q = xp.moveaxis(q, 1, 2)
+    b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
     return b * (np.pi * du * du / n_ang)
 
 
@@ -188,12 +260,12 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann"):
     Float = type(y)
     n_ang, num, du = _struct_meta(ray_spec)
     n_det = num[0]
-    u = (np.arange(n_det) - (n_det - 1) / 2) * du
-    w = sdd / np.sqrt(sdd**2 + u**2)
-    yn = np.asarray(y, np.float64).reshape(n_ang, n_det) * w
-    q = _filter_rows(yn, _ramlak(n_det, du, window), n_det)
-    b = xrt_struct_adjoint(ray_spec, knot_spec, order,
-                           Float(np.ascontiguousarray(q.reshape(-1))))
+    xp = _xp()
+    u = (xp.arange(n_det, dtype=xp.float32) - (n_det - 1) / 2) * du
+    w = sdd / xp.sqrt(sdd**2 + u**2)
+    yd = _dev(y).reshape(n_ang, n_det) * w
+    q = _filter_last_axis(yd, n_det, du, window)
+    b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
     return b * (np.pi * du * du / n_ang)
 
 
@@ -204,15 +276,17 @@ def bpf(ray_spec, knot_spec, y, order=0, margin=2.0):
 
     The unfiltered backprojection :math:`b = A^{\top} y` blurs the image with
     :math:`1/r` in the scan plane; deconvolution multiplies its spectrum by
-    the in-plane frequency magnitude :math:`|k|`. Since the filtering happens
-    after backprojection, the data-side step is a plain adjoint — no
+    the in-plane frequency magnitude :math:`|k|` (Hann-limited at the lattice
+    Nyquist — the plain ramp amplifies the discretization noise of the
+    voxel-basis backprojection). Since the filtering happens after
+    backprojection, the data-side step is a plain adjoint — no
     detector-domain filtering — which makes the method easy to adapt to
     non-standard acquisition geometries.
 
     The :math:`1/r` tails extend far beyond the object, so the backprojection
     is computed on a lattice enlarged by ``margin`` in the scan plane and
-    cropped after filtering; too small a margin shows up as a low-frequency
-    bias and edge ringing.
+    cropped after filtering; the abrupt end of detector coverage is tapered
+    before filtering for the same reason.
 
     Returns
     -------
@@ -226,44 +300,41 @@ def bpf(ray_spec, knot_spec, y, order=0, margin=2.0):
     step = tuple(knot_spec.step)
     start = tuple(knot_spec.start)
     D = len(shape)
+    xp = _xp()
 
     # enlarged lattice, concentric with the requested one (in-plane axes only)
     big, off = [], []
     for a in range(D):
         grow = margin if (D == 2 or a < 2) else 1.0
-        n_big = int(round(shape[a] * grow))
-        pad = (n_big - shape[a]) // 2
+        n_big = _fast_len(int(round(shape[a] * grow)))
         big.append(n_big)
-        off.append(pad)
+        off.append((n_big - shape[a]) // 2)
     big_spec = UniformSpec(
         start=tuple(start[a] - off[a] * step[a] for a in range(D)),
         step=step, num=tuple(big))
 
-    b = xrt_struct_adjoint(ray_spec, big_spec, order, y)
-    bn = np.asarray(b, np.float64).reshape(tuple(big))
+    b = xrt_adjoint(struct_rays(ray_spec), big_spec, order, y)
+    bn = _dev(b).reshape(tuple(big))
 
-    # The backprojection ends abruptly where detector coverage ends (finite
-    # detector width); filtering that cliff rings back into the field of
-    # view.  Taper it smoothly over ~10% of the coverage radius.
+    # taper the cliff where detector coverage ends (see docstring)
     u_spec = ray_spec[2]
-    n_det = int(u_spec.num[0])
     u_max = abs(float(u_spec.start[0])) + du / 2  # detector half-width
-    ax = [big_spec.start[a] + step[a] * np.arange(big[a]) for a in range(2)]
-    r_in = np.sqrt(ax[0][:, None] ** 2 + ax[1][None, :] ** 2)
-    taper = np.clip((u_max - r_in) / (0.1 * u_max), 0.0, 1.0)
+    ax = [xp.asarray(big_spec.start[a] + step[a] * np.arange(big[a]),
+                     dtype=xp.float32) for a in range(2)]
+    r_in = xp.sqrt(ax[0][:, None] ** 2 + ax[1][None, :] ** 2)
+    taper = xp.clip((u_max - r_in) / (0.1 * u_max), 0.0, 1.0)
     taper = taper * taper * (3 - 2 * taper)
     bn = bn * (taper[:, :, None] if D == 3 else taper)
 
-    k1 = [np.fft.fftfreq(n, d=step[a]) for a, n in enumerate(big)]
-    K = np.sqrt(k1[0][:, None] ** 2 + k1[1][None, :] ** 2)
-    # Hann rolloff to the lattice Nyquist: |k| amplifies the high-frequency
-    # discretization noise of the voxel-basis backprojection otherwise.
-    K = K * np.where(K < 0.5, 0.5 + 0.5 * np.cos(2 * np.pi * K), 0.0)
+    k1 = [xp.fft.fftfreq(big[0], d=step[0]).astype(xp.float32),
+          xp.fft.rfftfreq(big[1], d=step[1]).astype(xp.float32)]
+    K = xp.sqrt(k1[0][:, None] ** 2 + k1[1][None, :] ** 2)
+    K = K * xp.where(K < 0.5, 0.5 + 0.5 * xp.cos(2 * np.pi * K), 0.0)
     if D == 2:
-        g = np.real(np.fft.ifft2(np.fft.fft2(bn) * K))
+        g = xp.fft.irfft2(xp.fft.rfft2(bn) * K, s=tuple(big))
     else:  # 3D cylinder beam: the blur is in-plane (axes 0 and 1)
-        g = np.real(np.fft.ifft2(np.fft.fft2(bn, axes=(0, 1))
-                                 * K[:, :, None], axes=(0, 1)))
+        g = xp.fft.irfft2(xp.fft.rfft2(bn, axes=(0, 1)) * K[:, :, None],
+                          s=tuple(big[:2]), axes=(0, 1))
     sl = tuple(slice(off[a], off[a] + shape[a]) for a in range(D))
-    g = g[sl] * (np.pi * du / n_ang)
-    return Float(np.ascontiguousarray(g.reshape(-1), np.float32))
+    g = (g[sl] * (np.pi * du / n_ang)).astype(xp.float32)
+    return Float(xp.ascontiguousarray(g.reshape(-1)))

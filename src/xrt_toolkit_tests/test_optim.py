@@ -132,3 +132,37 @@ def test_bpf_2d():
     assert _psnr(rec, ph) > 20
     inside = rec[(r2 < 30**2) & (ph < 1.5)]
     assert abs(inside.mean() - 1.0) < 0.10
+
+
+def test_fbp_windows():
+    # every window preserves the quantitative scale; sharper windows resolve
+    # the disc edge better on noiseless data
+    ph, r2 = _phantom()
+    rays, knot = _parallel_scan()
+    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
+    for w in ("ramp", "shepp-logan", "cosine", "hamming", "hann"):
+        rec = np.asarray(xtk.fbp(rays, knot, y, window=w)).reshape(N, N)
+        inside = rec[(r2 < 30**2) & (ph < 1.5)]
+        assert abs(inside.mean() - 1.0) < 0.03, w
+    with pytest.raises(ValueError):
+        xtk.fbp(rays, knot, y, window="bogus")
+
+
+def test_optim_numpy_fallback():
+    # without CuPy the filtering runs on the host and must agree with the
+    # GPU path to fp32 round-off
+    import xrt_toolkit.optim as opt
+    if opt._cp is None:
+        pytest.skip("already on the NumPy path")
+    ph, _ = _phantom()
+    rays, knot = _parallel_scan()
+    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
+    ref = np.asarray(xtk.fbp(rays, knot, y))
+    saved, opt._cp = opt._cp, None
+    opt._filter_cache.clear()
+    try:
+        alt = np.asarray(xtk.fbp(rays, knot, y))
+    finally:
+        opt._cp = saved
+        opt._filter_cache.clear()
+    assert np.abs(ref - alt).max() < 1e-4
