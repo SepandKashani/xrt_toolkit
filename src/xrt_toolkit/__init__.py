@@ -57,3 +57,10 @@ from .util import (
 from .interop import (
     from_astra as from_astra,
 )
+from .optim import (
+    cg as cg,
+    gd as gd,
+    fbp as fbp,
+    fbp_cone as fbp_cone,
+    bpf as bpf,
+)
