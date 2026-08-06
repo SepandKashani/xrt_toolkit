@@ -166,3 +166,24 @@ def test_ad_n_matches_fd(order):
                               mode="evaluated")
 
     assert _fd_median_rel(val, grad) < 0.05
+
+
+def test_spline3d_fallback_matches_coopvec():
+    # The portable (no cooperative vectors) evaluation of the 3D spline
+    # network must agree with the tensor-core path to fp16 accuracy.
+    import xrt_toolkit.drjit.box_spline as bs
+    from drjit.cuda import Array2f
+    from drjit.cuda import Float as Fl
+
+    if not bs.coop_vec_available(__import__(
+            "xrt_toolkit.drjit.ray_xrt", fromlist=["net"]).net):
+        pytest.skip("cooperative vectors unavailable on this system")
+
+    rng = np.random.default_rng(7)
+    x, z = rng.uniform(-1.5, 1.5, (2, 4096)).astype(np.float32)
+    th = rng.uniform(0, np.pi, 4096).astype(np.float32)
+    n = Array2f(np.cos(th), np.sin(th))
+    net = __import__("xrt_toolkit.drjit.ray_xrt", fromlist=["net"]).net
+    a = np.asarray(bs.nn_project(net, Fl(x), Fl(z), n))
+    b = np.asarray(bs.nn_project_plain(Fl(x), Fl(z), n))
+    assert np.abs(a - b).max() < 5e-3

@@ -308,6 +308,7 @@ def box_spline_1d_dr(
 
 #     return output.reshape(x.shape)
 
+import os
 from drjit import nn as dnn
 from pathlib import Path
 from drjit.cuda.ad import Float32 , Float16 , TensorXf16
@@ -328,6 +329,66 @@ def nn_project(net, x: FloatT, z: FloatT, n: ArrayNfT) -> FloatT:
     (prediction,) = net(features)
     return Float(prediction)
 
+
+# Fallback evaluation of the same network without cooperative vectors.
+# Cooperative vectors require a Turing-or-newer GPU and driver R570+; the
+# fallback runs the identical MLP with ordinary fused multiply-adds in fp32,
+# so it works on any hardware Dr.Jit supports (V100/Volta included) at the
+# cost of speed.  Weight matrices are baked in as compile-time constants.
+_mlp_layers = None
+
+
+def _load_mlp_layers():
+    global _mlp_layers
+    if _mlp_layers is None:
+        import numpy as np
+        d = np.load(Path(__file__).parent / "gpu_3D_spline_mlp_layers.npz")
+        k, layers = 0, []
+        while f"W{k}" in d:
+            layers.append(([[float(v) for v in row] for row in d[f"W{k}"]],
+                           [float(v) for v in d[f"b{k}"]]))
+            k += 1
+        _mlp_layers = layers
+    return _mlp_layers
+
+
+def nn_project_plain(x: FloatT, z: FloatT, n: ArrayNfT) -> FloatT:
+    Float = type(x)
+    h = [Float(x), Float(z), Float(n.x), Float(n.y)]
+    layers = _load_mlp_layers()
+    for k, (W, b) in enumerate(layers):
+        out = []
+        for j in range(len(W)):
+            acc = Float(b[j])
+            for i, w in enumerate(W[j]):
+                acc = dr.fma(Float(w), h[i], acc)
+            out.append(dr.maximum(acc, 0) if k < len(layers) - 1 else acc)
+        h = out
+    return h[0]
+
+
+_coop_vec_ok = None
+
+
+def coop_vec_available(net) -> bool:
+    """Probe once whether cooperative-vector inference works on this system."""
+    global _coop_vec_ok
+    if os.environ.get("XRT_TOOLKIT_NO_COOPVEC"):
+        return False
+    if _coop_vec_ok is None:
+        if net is None:
+            _coop_vec_ok = False
+        else:
+            try:
+                ArrayNf = dr.array_t(Float32)
+                from drjit.cuda import Array2f, Float as Fl
+                y = nn_project(net, Fl(0.1), Fl(0.2), Array2f(1.0, 0.0))
+                dr.eval(y)
+                _coop_vec_ok = True
+            except Exception:
+                _coop_vec_ok = False
+    return _coop_vec_ok
+
 def spline_3d_dr(net, x: FloatT, z: FloatT, n: ArrayNfT) -> FloatT:
     r"""
     DrJit implementation to compute cubic spline :math:`\phi(x)`.
@@ -344,8 +405,10 @@ def spline_3d_dr(net, x: FloatT, z: FloatT, n: ArrayNfT) -> FloatT:
     """
     Float = type(x)
 
-    # y = dr.detach(nn_project(x, z, n), preserve_type=False) # 1) Embedding pytorch needs evaluated mode according to documentation 2) output when wrapping is automatically a cuda.ad array, so we detach it to get a Float array
-    y = nn_project(net, x, z, n)  # drjit native neural network inference
+    if coop_vec_available(net):
+        y = nn_project(net, x, z, n)      # tensor-core cooperative vectors
+    else:
+        y = nn_project_plain(x, z, n)     # portable fp32 fallback
 
     return Float(y)
 

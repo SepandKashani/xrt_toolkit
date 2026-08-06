@@ -22,30 +22,36 @@ from pathlib import Path
 from drjit.cuda.ad import Float32, Float16, TensorXf16
 import numpy as np
 
-rng_net = dr.rng(seed=0)
-net = dnn.Sequential(
-    dnn.Linear(4, 16),
-    dnn.ReLU(),
-    dnn.Linear(16, 16),
-    dnn.ReLU(),
-    dnn.Linear(16, 16),
-    dnn.ReLU(),
-    dnn.Linear(16, 16),
-    dnn.ReLU(),
-    dnn.Linear(16, 1),
-)
-net = net.alloc(dtype=TensorXf16, size=4, rng=rng_net)
-_packed = dnn.pack(net, layout='training')
-if isinstance(_packed, tuple):  # drjit < 1.4 returns (weights, net)
-    weights, net = _packed
-else:  # drjit >= 1.4 returns the packed module; the buffer is shared
-    net = _packed
-    weights = net.layers[0].weights.buffer
+# The 3D spline network needs fp16 support; construction can fail on
+# exotic setups, in which case the portable fallback path is used
+# (see box_spline.nn_project_plain) and `net` stays None.
+try:
+    rng_net = dr.rng(seed=0)
+    net = dnn.Sequential(
+        dnn.Linear(4, 16),
+        dnn.ReLU(),
+        dnn.Linear(16, 16),
+        dnn.ReLU(),
+        dnn.Linear(16, 16),
+        dnn.ReLU(),
+        dnn.Linear(16, 16),
+        dnn.ReLU(),
+        dnn.Linear(16, 1),
+    )
+    net = net.alloc(dtype=TensorXf16, size=4, rng=rng_net)
+    _packed = dnn.pack(net, layout='training')
+    if isinstance(_packed, tuple):  # drjit < 1.4 returns (weights, net)
+        weights, net = _packed
+    else:  # drjit >= 1.4 returns the packed module; the buffer is shared
+        net = _packed
+        weights = net.layers[0].weights.buffer
 
-weights_path = Path(__file__).parent / 'gpu_3D_spline_weights_drjit.npz'
+    weights_path = Path(__file__).parent / 'gpu_3D_spline_weights_drjit.npz'
 
-saved = np.load(weights_path)['weights']
-weights[:] = Float16(saved)
+    saved = np.load(weights_path)['weights']
+    weights[:] = Float16(saved)
+except Exception:
+    net = None
 
 
 eps = 1e-5

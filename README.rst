@@ -23,6 +23,19 @@ Features
 
 A CUDA GPU is required.
 
+Compatibility
+-------------
+
+- Dr.Jit 1.4+ requires an NVIDIA GPU of compute capability 7.5 or newer
+  (Turing and later) and driver R535+. On older GPUs (e.g. V100/Volta),
+  install ``drjit<1.4``; the toolkit supports both.
+- The fast path of the 3D spline basis (``order`` > 0 in 3D) evaluates a small
+  network with cooperative vectors, which need a Turing-or-newer GPU and
+  driver R570+. Where unavailable, the toolkit automatically falls back to an
+  equivalent plain fp32 evaluation that runs on any supported GPU (identical
+  results to fp16 accuracy, slower). Set ``XRT_TOOLKIT_NO_COOPVEC=1`` to force
+  the fallback.
+
 Installation
 ------------
 
