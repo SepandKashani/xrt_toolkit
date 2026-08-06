@@ -166,3 +166,72 @@ def test_optim_numpy_fallback():
         opt._cp = saved
         opt._filter_cache.clear()
     assert np.abs(ref - alt).max() < 1e-4
+
+
+def _cone3d_scan(N=96, n_ang=360):
+    sod, sdd = 1.6 * N, 2.8 * N
+    knot = xtk.UniformSpec(start=(-N / 2 + 0.5,) * 3, step=1, num=(N,) * 3)
+    rays = xtk.cone_beam(sod=sod, sdd=sdd,
+                         angles=dr.linspace(Float, 0, 2 * np.pi, n_ang, endpoint=False),
+                         detector_spec=xtk.DetectorSpec(size=(2.2 * N, 1.75 * N),
+                                                        num_cell=(216, 168)))
+    return rays, knot, sod, sdd
+
+
+def _ball_means(rec, N):
+    zz, yy, xx = np.mgrid[:N, :N, :N].astype(np.float32)
+    rec = np.asarray(rec).reshape(N, N, N)
+    out = []
+    for dz, dx in ((0, 0), (0, 0.18 * N), (0.18 * N, 0)):  # center, in-plane, off-plane
+        m = ((xx - N / 2 + .5 - dx) ** 2 + (yy - N / 2 + .5) ** 2
+             + (zz - N / 2 + .5 - dz) ** 2) < (0.07 * N) ** 2
+        out.append(float(rec[m].mean()))
+    return out
+
+
+def test_fbp_cone_3d_fdk():
+    N = 96
+    zz, yy, xx = np.mgrid[:N, :N, :N].astype(np.float32)
+    ph = (((xx - N/2 + .5) ** 2 + (yy - N/2 + .5) ** 2 + (zz - N/2 + .5) ** 2)
+          < (0.3 * N) ** 2).astype(np.float32)
+    rays, knot, sod, sdd = _cone3d_scan(N)
+    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
+    rec = xtk.fbp_cone(rays, knot, y, sod=sod, sdd=sdd, window="ramp")
+    for m, tol in zip(_ball_means(rec, N), (0.03, 0.03, 0.04)):
+        assert abs(m - 1.0) < tol
+
+
+def test_fbp_cone_3d_bpf():
+    N = 96
+    zz, yy, xx = np.mgrid[:N, :N, :N].astype(np.float32)
+    ph = (((xx - N/2 + .5) ** 2 + (yy - N/2 + .5) ** 2 + (zz - N/2 + .5) ** 2)
+          < (0.3 * N) ** 2).astype(np.float32)
+    rays, knot, sod, sdd = _cone3d_scan(N)
+    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
+    rec = xtk.fbp_cone(rays, knot, y, sod=sod, sdd=sdd, method="bpf")
+    means = _ball_means(rec, N)
+    assert abs(means[0] - 1.0) < 0.05        # exact at the isocenter
+    for m in means[1:]:                      # shift-variant blur off-center
+        assert abs(m - 1.0) < 0.15
+    with pytest.raises(NotImplementedError):  # 2D fan has no bpf path
+        knot2 = xtk.UniformSpec(start=(-N / 2 + 0.5,) * 2, step=1, num=(N, N))
+        cone2 = xtk.cone_beam(sod=1.6 * N, sdd=2.8 * N,
+                              angles=dr.linspace(Float, 0, 2 * np.pi, 8, endpoint=False),
+                              detector_spec=xtk.DetectorSpec(size=(2.2 * N,), num_cell=(32,)))
+        xtk.fbp_cone(cone2, knot2, dr.zeros(Float, 8 * 32), sod=1.6 * N,
+                     sdd=2.8 * N, method="bpf")
+
+
+def test_bpf_3d_anisotropic_detector():
+    # the axial detector spacing enters the backprojection density (1/du2)
+    N = 64
+    zz, yy, xx = np.mgrid[:N, :N, :N].astype(np.float32)
+    r2 = (xx - N/2 + .5) ** 2 + (yy - N/2 + .5) ** 2 + (zz - N/2 + .5) ** 2
+    ph = (r2 < (0.3 * N) ** 2).astype(np.float32)
+    knot = xtk.UniformSpec(start=(-N / 2 + 0.5,) * 3, step=1, num=(N,) * 3)
+    rays = xtk.parallel_beam(dr.linspace(Float, 0, np.pi, 180, endpoint=False),
+                             xtk.DetectorSpec(size=(1.5 * N, 1.5 * N), num_cell=(96, 64)))
+    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
+    rec = np.asarray(xtk.bpf(rays, knot, y)).reshape(N, N, N)
+    inside = rec[r2 < (0.2 * N) ** 2]
+    assert abs(inside.mean() - 1.0) < 0.10
