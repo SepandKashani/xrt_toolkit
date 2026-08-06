@@ -201,12 +201,28 @@ def _struct_meta(ray_spec):
     return n_ang, num, du
 
 
+def _own(x, Float):
+    """Dr.Jit copy of a device array.
+
+    ``Float(cupy_array)`` is a zero-copy view of CuPy *pool* memory, which is
+    released as soon as the array object dies and may be handed to any later
+    allocation — a use-after-free once the view outlives the array. Evaluating
+    an arithmetic copy while the source is still alive moves the values into
+    Dr.Jit-owned memory.
+    """
+    xp = _xp()
+    view = Float(xp.ascontiguousarray(x.reshape(-1)))
+    out = view + Float(0)
+    dr.eval(out)   # runs while `x` is still referenced by the caller
+    return out
+
+
 def _adjoint_explicit(ray_spec, knot_spec, order, q, Float):
     """Backproject a device array through the fused explicit-ray kernel."""
-    xp = _xp()
     rays = struct_rays(ray_spec)
-    return xrt_adjoint(rays, knot_spec, order,
-                       Float(xp.ascontiguousarray(q.reshape(-1))))
+    b = xrt_adjoint(rays, knot_spec, order, _own(q, Float))
+    dr.eval(b)
+    return b
 
 
 def _bpf_core(ray_spec, knot_spec, y, order, margin, mag, const):
@@ -260,7 +276,7 @@ def _bpf_core(ray_spec, knot_spec, y, order, margin, mag, const):
                           s=tuple(big[:2]), axes=(0, 1))
     sl = tuple(slice(off[a], off[a] + shape[a]) for a in range(D))
     g = (g[sl] * const).astype(xp.float32)
-    return Float(xp.ascontiguousarray(g.reshape(-1)))
+    return _own(g, Float)
 
 
 # -------------------------------------------------------------- analytic ----

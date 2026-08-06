@@ -234,3 +234,23 @@ def test_bpf_3d_anisotropic_detector():
     rec = np.asarray(xtk.bpf(rays, knot, y)).reshape(N, N, N)
     inside = rec[r2 < (0.2 * N) ** 2]
     assert abs(inside.mean() - 1.0) < 0.10
+
+
+def test_results_own_their_memory():
+    # results built from CuPy buffers must not be views of pool memory:
+    # recycle the pool with poison allocations before evaluating
+    import xrt_toolkit.optim as opt
+    if opt._cp is None:
+        pytest.skip("NumPy path has no pool aliasing")
+    cp = opt._cp
+    ph, r2 = _phantom()
+    rays, knot = _parallel_scan()
+    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
+    rec_fbp = xtk.fbp(rays, knot, y)
+    rec_bpf = xtk.bpf(rays, knot, y)
+    junk = [cp.full(180 * 192 + i, 333.0, dtype=cp.float32) for i in range(8)]
+    junk += [cp.full(N * N + i, -777.0, dtype=cp.float32) for i in range(8)]
+    for rec in (rec_fbp, rec_bpf):
+        inside = np.asarray(rec).reshape(N, N)[(r2 < 30**2) & (ph < 1.5)]
+        assert abs(inside.mean() - 1.0) < 0.10
+    del junk
