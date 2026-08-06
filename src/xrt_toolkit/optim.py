@@ -313,13 +313,13 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
       custom backprojector is needed; the residual per-ray obliquity factor
       is applied to the filtered projections. Exact in the midplane, the
       usual FDK cone artifacts away from it.
-    * ``"bpf"`` — backprojection of the raw data followed by in-plane
-      :math:`|k|` filtering. No detector-domain filtering at all, which makes
-      it robust to non-ideal sampling. Values are exact at the isocenter but
-      drift up to :math:`\sim 10\%` toward the edge of the field of view for
-      wide cones (the divergent-beam backprojection blur is shift-variant,
-      which the stationary :math:`|k|` filter cannot capture); prefer
-      ``"fdk"`` or :py:func:`cg` when values matter.
+    * ``"bpf"`` — not available for divergent scans: image-domain
+      deconvolution requires the backprojection blur to be shift-invariant,
+      which holds for parallel scans (see :py:func:`bpf`) but measurably
+      fails for cone geometries with a voxel-basis adjoint. The
+      backprojection-filtration algorithms that do exist for cone beams
+      (Hilbert filtering along PI-lines) are out of scope; use ``"fdk"`` or
+      :py:func:`cg`.
 
     With a 1D detector (2D fan beam) the classic fan FBP is used (``method``
     is ignored except that ``"bpf"`` raises). Values are exact at the
@@ -346,8 +346,11 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
 
     if len(num) == 1:  # 2D fan beam
         if method == "bpf":
-            raise NotImplementedError("bpf is implemented for 2D parallel "
-                                      "and 3D cone scans, not 2D fan")
+            raise NotImplementedError(
+                "backprojection-then-filtering assumes a shift-invariant "
+                "backprojection blur; that holds for parallel scans (use "
+                "bpf()) but not for divergent ones. Use method='fdk' or "
+                "optim.cg.")
         u = (xp.arange(n_det, dtype=xp.float32) - (n_det - 1) / 2) * du
         w = sdd / xp.sqrt(sdd**2 + u**2)
         yd = _dev(y).reshape(n_ang, n_det) * w
@@ -359,8 +362,10 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
     u_spec = ray_spec[2]
     du1, du2 = float(u_spec.step[0]), float(u_spec.step[1])
     if method == "bpf":
-        return _bpf_core(ray_spec, knot_spec, y, order, 2.0, mag,
-                         np.pi * du1 * du2 * mag * mag / n_ang)
+        raise NotImplementedError(
+            "backprojection-then-filtering assumes a shift-invariant "
+            "backprojection blur; that holds for parallel scans (use bpf()) "
+            "but not for divergent ones. Use method='fdk' or optim.cg.")
     if method != "fdk":
         raise ValueError(f"unknown method {method!r}")
 

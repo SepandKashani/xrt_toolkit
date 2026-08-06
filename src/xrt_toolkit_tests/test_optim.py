@@ -201,25 +201,24 @@ def test_fbp_cone_3d_fdk():
         assert abs(m - 1.0) < tol
 
 
-def test_fbp_cone_3d_bpf():
-    N = 96
-    zz, yy, xx = np.mgrid[:N, :N, :N].astype(np.float32)
-    ph = (((xx - N/2 + .5) ** 2 + (yy - N/2 + .5) ** 2 + (zz - N/2 + .5) ** 2)
-          < (0.3 * N) ** 2).astype(np.float32)
-    rays, knot, sod, sdd = _cone3d_scan(N)
-    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
-    rec = xtk.fbp_cone(rays, knot, y, sod=sod, sdd=sdd, method="bpf")
-    means = _ball_means(rec, N)
-    assert abs(means[0] - 1.0) < 0.05        # exact at the isocenter
-    for m in means[1:]:                      # shift-variant blur off-center
-        assert abs(m - 1.0) < 0.15
-    with pytest.raises(NotImplementedError):  # 2D fan has no bpf path
-        knot2 = xtk.UniformSpec(start=(-N / 2 + 0.5,) * 2, step=1, num=(N, N))
-        cone2 = xtk.cone_beam(sod=1.6 * N, sdd=2.8 * N,
-                              angles=dr.linspace(Float, 0, 2 * np.pi, 8, endpoint=False),
-                              detector_spec=xtk.DetectorSpec(size=(2.2 * N,), num_cell=(32,)))
-        xtk.fbp_cone(cone2, knot2, dr.zeros(Float, 8 * 32), sod=1.6 * N,
-                     sdd=2.8 * N, method="bpf")
+def test_fbp_cone_bpf_raises():
+    # image-domain deconvolution needs a shift-invariant blur: parallel only
+    N2 = 64
+    knot = xtk.UniformSpec(start=(-N2 / 2 + 0.5,) * 2, step=1, num=(N2, N2))
+    cone = xtk.cone_beam(sod=1.6 * N2, sdd=2.8 * N2,
+                         angles=dr.linspace(Float, 0, 2 * np.pi, 8, endpoint=False),
+                         detector_spec=xtk.DetectorSpec(size=(2.2 * N2,), num_cell=(32,)))
+    with pytest.raises(NotImplementedError):
+        xtk.fbp_cone(cone, knot, dr.zeros(Float, 8 * 32), sod=1.6 * N2,
+                     sdd=2.8 * N2, method="bpf")
+    knot3 = xtk.UniformSpec(start=(-N2 / 2 + 0.5,) * 3, step=1, num=(N2,) * 3)
+    cone3 = xtk.cone_beam(sod=1.6 * N2, sdd=2.8 * N2,
+                          angles=dr.linspace(Float, 0, 2 * np.pi, 8, endpoint=False),
+                          detector_spec=xtk.DetectorSpec(size=(2.2 * N2, 1.6 * N2),
+                                                         num_cell=(32, 24)))
+    with pytest.raises(NotImplementedError):
+        xtk.fbp_cone(cone3, knot3, dr.zeros(Float, 8 * 32 * 24), sod=1.6 * N2,
+                     sdd=2.8 * N2, method="bpf")
 
 
 def test_bpf_3d_anisotropic_detector():

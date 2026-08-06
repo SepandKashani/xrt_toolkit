@@ -51,9 +51,12 @@ Installation
 Getting started
 ---------------
 
-``tutorial.ipynb`` runs small 2D and 3D reconstructions with the different
-basis orders and demonstrates differentiation with respect to the acquisition
-geometry.
+``tutorial_2D.ipynb`` covers the forward and adjoint operators, arbitrary and
+structured geometries, reconstruction with ``xrt_toolkit.optim`` and
+differentiation with respect to the acquisition geometry;
+``tutorial_3D.ipynb`` covers parallel (cylinder) and cone-beam scans in 3D
+(FDK, BPF, CG). Problem sizes and basis order are variables at the top of
+each notebook.
 
 Tests
 -----
