@@ -7,9 +7,14 @@ Analytic methods (:py:func:`fbp`, :py:func:`fbp_cone`, :py:func:`bpf`) operate
 on structured scans built with :py:func:`~xrt_toolkit.parallel_beam` /
 :py:func:`~xrt_toolkit.cone_beam`.
 
-Everything runs on the GPU: backprojections go through the fused explicit-ray
-kernels (:py:func:`~xrt_toolkit.struct_rays`), and Fourier filtering uses CuPy
-FFTs on the same device memory as the Dr.Jit arrays (zero-copy through DLPack).
+Everything runs on the GPU: the analytic methods backproject with a fused
+voxel-driven interpolating kernel (the textbook FBP/FDK backprojector — the
+matched exact-chord adjoint belongs inside the iterative solvers, where the
+pair must be adjoint, but as a backprojector its chords degenerate for rays
+nearly tangent to lattice planes and print grid-aligned artifacts), and
+Fourier filtering uses CuPy FFTs on the same device memory as the Dr.Jit
+arrays (zero-copy through DLPack). Reconstructions are masked to the
+fully-covered field of view, as usual for analytic methods.
 If CuPy is not installed, filtering transparently falls back to NumPy on the
 host. Filters follow the standard discrete recipes (Kak & Slaney kernel built
 periodically on the padded grid, real FFTs, fast transform lengths, the usual
@@ -201,6 +206,23 @@ def _filter_last_axis(yd, n_det, du, window, w_cut=1.0):
     return q[..., :n_det].astype(xp.float32)
 
 
+def _fov_mask(b, ray_spec, knot_spec, r_fov):
+    """Zero voxels outside the fully-covered field of view (standard FBP
+    practice: outside it, projections cover the voxel only for part of the
+    angles and the unbalanced filter lobes leave large artifacts)."""
+    xp = _xp()
+    num = tuple(knot_spec.num)
+    step = tuple(float(v) for v in knot_spec.step)
+    start = tuple(float(v) for v in knot_spec.start)
+    ax = [xp.asarray(start[a] + step[a] * np.arange(num[a]), dtype=xp.float32)
+          for a in range(2)]
+    r_in = xp.sqrt(ax[0][:, None] ** 2 + ax[1][None, :] ** 2)
+    m = (r_in <= r_fov).astype(xp.float32)
+    bd = _dev(b).reshape(num)
+    bd = bd * (m[:, :, None] if len(num) == 3 else m)
+    return bd
+
+
 def _struct_meta(ray_spec):
     t_spec, _, u_spec = ray_spec
     n_ang = dr.width(t_spec)
@@ -225,23 +247,130 @@ def _own(x, Float):
     return out
 
 
-def _adjoint_explicit(ray_spec, knot_spec, order, q, Float):
-    """Backproject a device array through the fused explicit-ray kernel."""
-    rays = struct_rays(ray_spec)
-    b = xrt_adjoint(rays, knot_spec, order, _own(q, Float))
-    dr.eval(b)
-    return b
+def _bp_voxel(q, ray_spec, knot_spec, divergent=False, sod=None, sdd=None):
+    r"""
+    Voxel-driven interpolating backprojection (the textbook FBP/FDK
+    backprojector, as in ASTRA/TIGRE): every voxel accumulates a (bi)linearly
+    interpolated sample of each filtered projection at its projected detector
+    coordinate. For divergent scans the FDK distance weight
+    :math:`(\mathrm{sod}/U)^{2}` is applied per (voxel, projection).
+
+    This is deliberately NOT the matched adjoint: the exact-chord adjoint is
+    the right operator inside iterative solvers, but as a backprojector its
+    chords degenerate for rays nearly tangent to lattice planes, printing
+    horizontal/vertical line artifacts. Interpolating backprojection has no
+    such failure mode.
+
+    ``q``: device array shaped ``(n_ang, n_u1[, n_u2])``. Returns the plain
+    sum over projections (unscaled), as a Dr.Jit array over voxels.
+    """
+    from drjit.cuda import Float as F, Int32, UInt32
+
+    t_spec, n_spec, u_spec = ray_spec
+    T = np.array(t_spec)                       # (D, D, n_ang) homogeneous
+    Nn = np.array(n_spec)
+    n_ang = T.shape[-1]
+    D = len(knot_spec.num)
+    num = tuple(knot_spec.num)
+    step = tuple(float(v) for v in knot_spec.step)
+    start = tuple(float(v) for v in knot_spec.start)
+    (u1_0, du1, n_u1) = (float(u_spec.start[0]), float(u_spec.step[0]),
+                         int(u_spec.num[0]))
+    three_d = D == 3
+    if three_d:
+        (u2_0, du2, n_u2) = (float(u_spec.start[1]), float(u_spec.step[1]),
+                             int(u_spec.num[1]))
+    else:
+        n_u2 = 1
+
+    # per-angle tables.  Parallel scans park the detector axes in the
+    # t-matrix (t = u1 d1 [+ u2 d2] + offset); divergent scans park them in
+    # the n-matrix (n = sdd c + u1 d1 [+ u2 d2]) with t = source.
+    A = Nn if divergent else T
+    d1 = [F(np.ascontiguousarray(A[c, 0, :], np.float32)) for c in range(D)]
+    off = [F(np.ascontiguousarray(T[c, -1, :], np.float32)) for c in range(D)]
+    if divergent:
+        cd = Nn[:, -1, :] / sdd                # central unit direction
+        cdir = [F(np.ascontiguousarray(cd[c], np.float32)) for c in range(D)]
+    if three_d:
+        d2 = [F(np.ascontiguousarray(A[c, 1, :], np.float32)) for c in range(D)]
+
+    qf = _own(q, F)
+    dr.eval(*d1, *off, qf)
+
+    # voxel world coordinates (lane = voxel, C-order like the volume layout)
+    lane = dr.arange(UInt32, int(np.prod(num)))
+    if three_d:
+        ix = lane // (num[1] * num[2])
+        iy = (lane // num[2]) % num[1]
+        iz = lane % num[2]
+        xw = [start[0] + step[0] * F(ix), start[1] + step[1] * F(iy),
+              start[2] + step[2] * F(iz)]
+    else:
+        xw = [start[0] + step[0] * F(lane // num[1]),
+              start[1] + step[1] * F(lane % num[1])]
+
+    def body(a, acc):
+        e1 = [dr.gather(F, d1[c], a) for c in range(D)]
+        o = [dr.gather(F, off[c], a) for c in range(D)]
+        v = [xw[c] - o[c] for c in range(D)]
+        if divergent:
+            c = [dr.gather(F, cdir[k], a) for k in range(D)]
+            U = sum(v[k] * c[k] for k in range(D))
+            mag = sdd / U
+            w = (sod / U) ** 2
+        else:
+            mag = 1.0
+            w = 1.0
+        u1 = sum(v[k] * e1[k] for k in range(D)) * mag
+        p1 = (u1 - u1_0) / du1
+        i1 = dr.floor(p1)
+        f1 = p1 - i1
+        i1 = Int32(i1)
+        ok = (i1 >= 0) & (i1 < n_u1 - 1)
+        i1 = dr.clip(i1, 0, n_u1 - 2)
+        base = a * (n_u1 * n_u2)
+        if three_d:
+            e2 = [dr.gather(F, d2[c], a) for c in range(D)]
+            u2 = sum(v[k] * e2[k] for k in range(D)) * mag
+            p2 = (u2 - u2_0) / du2
+            i2 = dr.floor(p2)
+            f2 = p2 - i2
+            i2 = Int32(i2)
+            ok = ok & (i2 >= 0) & (i2 < n_u2 - 1)
+            i2 = dr.clip(i2, 0, n_u2 - 2)
+            idx = UInt32(base + i1 * n_u2 + i2)
+            s00 = dr.gather(F, qf, idx, ok)
+            s01 = dr.gather(F, qf, idx + 1, ok)
+            s10 = dr.gather(F, qf, idx + n_u2, ok)
+            s11 = dr.gather(F, qf, idx + n_u2 + 1, ok)
+            smp = dr.lerp(dr.lerp(s00, s01, f2), dr.lerp(s10, s11, f2), f1)
+        else:
+            idx = UInt32(base + i1)
+            smp = dr.lerp(dr.gather(F, qf, idx, ok),
+                          dr.gather(F, qf, idx + 1, ok), f1)
+        return a + 1, dr.fma(dr.select(ok, w, 0.0), smp, acc)
+
+    a0 = dr.zeros(UInt32, dr.width(lane))
+    acc0 = dr.zeros(F, dr.width(lane))
+    _, out = dr.while_loop(state=(a0, acc0),
+                           cond=lambda a, acc: a < n_ang,
+                           body=body, labels=("a", "acc"),
+                           max_iterations=-1)
+    dr.eval(out)
+    return out
 
 
-def _bpf_core(ray_spec, knot_spec, y, order, margin, mag, const):
-    """Enlarged-lattice adjoint, coverage taper, in-plane Hann-|k| filter."""
+def _bpf_core(ray_spec, knot_spec, y, margin, mag, const, window="hann"):
+    """Voxel-driven backprojection of the raw data on an enlarged lattice,
+    coverage taper, in-plane Hann-limited |k| filter, crop, scale."""
     from .util import UniformSpec
 
     Float = type(y)
-    _, _, du = _struct_meta(ray_spec)
+    n_ang, num_det, du = _struct_meta(ray_spec)
     shape = tuple(knot_spec.num)
-    step = tuple(knot_spec.step)
-    start = tuple(knot_spec.start)
+    step = tuple(float(v) for v in knot_spec.step)
+    start = tuple(float(v) for v in knot_spec.start)
     D = len(shape)
     xp = _xp()
 
@@ -256,14 +385,13 @@ def _bpf_core(ray_spec, knot_spec, y, order, margin, mag, const):
         start=tuple(start[a] - off[a] * step[a] for a in range(D)),
         step=step, num=tuple(big))
 
-    b = xrt_adjoint(struct_rays(ray_spec), big_spec, order, y)
+    yd = _dev(y).reshape((n_ang,) + num_det)
+    b = _bp_voxel(yd, ray_spec, big_spec)
     bn = _dev(b).reshape(tuple(big))
 
     # taper the cliff where detector coverage ends (finite detector width);
-    # for divergent beams the coverage radius is the detector half-width
-    # magnified back to the isocenter
-    u_spec = ray_spec[2]
-    u_max = (abs(float(u_spec.start[0])) + du / 2) * mag
+    # filtering that cliff rings back into the field of view
+    u_max = (abs(float(ray_spec[2].start[0])) + du / 2) * mag
     ax = [xp.asarray(big_spec.start[a] + step[a] * np.arange(big[a]),
                      dtype=xp.float32) for a in range(2)]
     r_in = xp.sqrt(ax[0][:, None] ** 2 + ax[1][None, :] ** 2)
@@ -271,12 +399,15 @@ def _bpf_core(ray_spec, knot_spec, y, order, margin, mag, const):
     taper = taper * taper * (3 - 2 * taper)
     bn = bn * (taper[:, :, None] if D == 3 else taper)
 
-    # |k| deconvolution, Hann-limited at the lattice Nyquist: the plain ramp
-    # amplifies the discretization noise of the voxel-basis backprojection
     k1 = [xp.fft.fftfreq(big[0], d=step[0]).astype(xp.float32),
           xp.fft.rfftfreq(big[1], d=step[1]).astype(xp.float32)]
     K = xp.sqrt(k1[0][:, None] ** 2 + k1[1][None, :] ** 2)
-    K = K * xp.where(K < 0.5, 0.5 + 0.5 * xp.cos(2 * np.pi * K), 0.0)
+    if window == "hann":
+        K = K * xp.where(K < 0.5, 0.5 + 0.5 * xp.cos(2 * np.pi * K), 0.0)
+    elif window in (None, "ramp"):
+        K = xp.where(K <= 0.5, K, 0.0)
+    else:
+        raise ValueError(f"unknown window {window!r}")
     if D == 2:
         g = xp.fft.irfft2(xp.fft.rfft2(bn) * K, s=tuple(big))
     else:  # the blur is in-plane (axes 0 and 1)
@@ -288,7 +419,7 @@ def _bpf_core(ray_spec, knot_spec, y, order, margin, mag, const):
 
 
 # -------------------------------------------------------------- analytic ----
-def fbp(ray_spec, knot_spec, y, order=0, window="hann"):
+def fbp(ray_spec, knot_spec, y, window="hann"):
     r"""
     Filtered backprojection for :py:func:`~xrt_toolkit.parallel_beam` scans.
 
@@ -319,15 +450,14 @@ def fbp(ray_spec, knot_spec, y, order=0, window="hann"):
         yd = xp.ascontiguousarray(xp.moveaxis(yd, 2, 1))
     q = _filter_last_axis(yd, n_det, du, window, w_cut)
     if len(num) == 2:
-        q = xp.moveaxis(q, 1, 2)
-    b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
-    const = np.pi * du * du / n_ang
-    if len(num) == 2:  # 3D: the axial ray density adds 1/du2
-        const = const * float(ray_spec[2].step[1])
-    return b * const
+        q = xp.ascontiguousarray(xp.moveaxis(q, 1, 2))
+    b = _bp_voxel(q, ray_spec, knot_spec)
+    u_half = abs(float(ray_spec[2].start[0])) + du / 2
+    b = _fov_mask(b, ray_spec, knot_spec, u_half)
+    return _own(b, Float) * (np.pi * du / n_ang)
 
 
-def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
+def fbp_cone(ray_spec, knot_spec, y, sod, sdd, window="hann",
              method="fdk"):
     r"""
     Filtered backprojection for :py:func:`~xrt_toolkit.cone_beam` scans over a
@@ -386,8 +516,12 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
         w_cut = min(1.0, du * mag / step_ip)  # detector Nyquist at the isocenter
         yd = _dev(y).reshape(n_ang, n_det) * w
         q = _filter_last_axis(yd, n_det, du, window, w_cut)
-        b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
-        return b * (np.pi * du * du / n_ang)
+        # the ramp kernel lives in detector units; the reconstruction needs it
+        # in isocenter units, hence the sdd/sod rescale
+        b = _bp_voxel(q, ray_spec, knot_spec, divergent=True, sod=sod, sdd=sdd)
+        u_half = abs(float(ray_spec[2].start[0])) + du / 2
+        b = _fov_mask(b, ray_spec, knot_spec, u_half * sod / (sdd + u_half))
+        return _own(b, Float) * (np.pi * du * sdd / (n_ang * sod))
 
     n1, n2 = num
     u_spec = ray_spec[2]
@@ -408,12 +542,15 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
     yd = _dev(y).reshape(n_ang, n1, n2) * cos[None]
     q = xp.ascontiguousarray(xp.moveaxis(yd, 2, 1))  # ramp along u1
     q = _filter_last_axis(q, n1, du1, window, w_cut)
-    q = xp.moveaxis(q, 1, 2) / (cos[None] ** 2)
-    b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
-    return b * (np.pi * du1 * du1 * du2 * sod / (n_ang * sdd))
+    q = xp.ascontiguousarray(xp.moveaxis(q, 1, 2))
+    # detector-unit ramp -> isocenter units: sdd/sod
+    b = _bp_voxel(q, ray_spec, knot_spec, divergent=True, sod=sod, sdd=sdd)
+    u_half = abs(float(ray_spec[2].start[0])) + du1 / 2
+    b = _fov_mask(b, ray_spec, knot_spec, u_half * sod / (sdd + u_half))
+    return _own(b, Float) * (np.pi * du1 * sdd / (n_ang * sod))
 
 
-def bpf(ray_spec, knot_spec, y, order=0, margin=2.0):
+def bpf(ray_spec, knot_spec, y, margin=2.0, window="hann"):
     r"""
     Backprojection-then-filtering for :py:func:`~xrt_toolkit.parallel_beam`
     scans (2D and 3D cylinder beam). For cone scans use
@@ -433,7 +570,5 @@ def bpf(ray_spec, knot_spec, y, order=0, margin=2.0):
     f: FloatT
     """
     n_ang, num, du = _struct_meta(ray_spec)
-    const = np.pi * du / n_ang
-    if len(num) == 2:  # 3D: axial ray density adds 1/du2
-        const = const * float(ray_spec[2].step[1])
-    return _bpf_core(ray_spec, knot_spec, y, order, margin, 1.0, const)
+    return _bpf_core(ray_spec, knot_spec, y, margin, 1.0,
+                     np.pi / n_ang, window)
