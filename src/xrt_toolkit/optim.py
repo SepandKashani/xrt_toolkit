@@ -147,7 +147,7 @@ def _fast_len(n):
 _filter_cache = {}
 
 
-def _ramp_rfft(n_det, du, window):
+def _ramp_rfft(n_det, du, window, w_cut=1.0):
     r"""
     rfft of the discrete Ram-Lak kernel on the padded grid, times the window.
 
@@ -155,9 +155,16 @@ def _ramp_rfft(n_det, du, window):
     scikit-image's ``iradon``) rather than truncated, which keeps its DC
     exactly zero; the padded length is at least ``2 * n_det`` against
     circular-convolution wrap-around, rounded up to an FFT-friendly size.
-    Windows use the normalized frequency :math:`w \in [0, 1]` (1 = Nyquist).
+
+    ``w_cut`` is the highest frequency the RECONSTRUCTION lattice can
+    represent, in units of the detector Nyquist. When the detector samples
+    finer than the lattice (``du < step``), the ramp must stop at the lattice
+    Nyquist: everything above it cannot be represented by the volume and is
+    aliased into broadband noise by the backprojection — finer detectors then
+    make the reconstruction WORSE, not better. Windows are applied relative
+    to this cutoff.
     """
-    key = (n_det, float(du), window, _cp is None)
+    key = (n_det, float(du), window, float(w_cut), _cp is None)
     H = _filter_cache.get(key)
     if H is not None:
         return H
@@ -169,26 +176,27 @@ def _ramp_rfft(n_det, du, window):
     h[k] = -1.0 / (np.pi * k * du) ** 2
     h[-k] = -1.0 / (np.pi * k * du) ** 2
     H = xp.fft.rfft(h).real
-    w = xp.arange(L // 2 + 1) / (L / 2)  # 0..1, 1 = Nyquist
+    w = xp.arange(L // 2 + 1) / (L / 2) / w_cut  # 0..1, 1 = usable Nyquist
     if window == "hann":
-        H = H * (0.5 + 0.5 * xp.cos(np.pi * w))
+        H = H * (0.5 + 0.5 * xp.cos(np.pi * xp.minimum(w, 1.0)))
     elif window == "hamming":
-        H = H * (0.54 + 0.46 * xp.cos(np.pi * w))
+        H = H * (0.54 + 0.46 * xp.cos(np.pi * xp.minimum(w, 1.0)))
     elif window == "cosine":
-        H = H * xp.cos(np.pi * w / 2)
+        H = H * xp.cos(np.pi * xp.minimum(w, 1.0) / 2)
     elif window == "shepp-logan":
-        H = H * xp.where(w > 0, xp.sin(np.pi * w / 2) / xp.maximum(np.pi * w / 2, 1e-12), 1.0)
+        H = H * xp.where(w > 0, xp.sin(np.pi * xp.minimum(w, 1.0) / 2)
+                         / xp.maximum(np.pi * w / 2, 1e-12), 1.0)
     elif window not in (None, "ramp"):
         raise ValueError(f"unknown window {window!r}")
-    H = H.astype(xp.float32)
+    H = xp.where(w <= 1.0, H, 0.0).astype(xp.float32)
     _filter_cache[key] = (L, H)
     return L, H
 
 
-def _filter_last_axis(yd, n_det, du, window):
+def _filter_last_axis(yd, n_det, du, window, w_cut=1.0):
     """Ramp-filter a device array along its last axis (real FFTs, padded)."""
     xp = _xp()
-    L, H = _ramp_rfft(n_det, du, window)
+    L, H = _ramp_rfft(n_det, du, window, w_cut)
     q = xp.fft.irfft(xp.fft.rfft(yd, n=L, axis=-1) * H, n=L, axis=-1)
     return q[..., :n_det].astype(xp.float32)
 
@@ -304,14 +312,19 @@ def fbp(ray_spec, knot_spec, y, order=0, window="hann"):
     n_ang, num, du = _struct_meta(ray_spec)
     n_det = num[0]  # in-plane detector axis (parallel_beam convention)
     xp = _xp()
+    step_ip = min(float(v) for v in knot_spec.step[:2])  # in-plane lattice step
+    w_cut = min(1.0, du / step_ip)
     yd = _dev(y).reshape(n_ang, *num)
     if len(num) == 2:  # 3D: filter along the in-plane axis, keep the axial one
         yd = xp.ascontiguousarray(xp.moveaxis(yd, 2, 1))
-    q = _filter_last_axis(yd, n_det, du, window)
+    q = _filter_last_axis(yd, n_det, du, window, w_cut)
     if len(num) == 2:
         q = xp.moveaxis(q, 1, 2)
     b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
-    return b * (np.pi * du * du / n_ang)
+    const = np.pi * du * du / n_ang
+    if len(num) == 2:  # 3D: the axial ray density adds 1/du2
+        const = const * float(ray_spec[2].step[1])
+    return b * const
 
 
 def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
@@ -369,8 +382,10 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
                 "optim.cg.")
         u = (xp.arange(n_det, dtype=xp.float32) - (n_det - 1) / 2) * du
         w = sdd / xp.sqrt(sdd**2 + u**2)
+        step_ip = min(float(v) for v in knot_spec.step)
+        w_cut = min(1.0, du * mag / step_ip)  # detector Nyquist at the isocenter
         yd = _dev(y).reshape(n_ang, n_det) * w
-        q = _filter_last_axis(yd, n_det, du, window)
+        q = _filter_last_axis(yd, n_det, du, window, w_cut)
         b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
         return b * (np.pi * du * du / n_ang)
 
@@ -388,9 +403,11 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, order=0, window="hann",
     u1 = (xp.arange(n1, dtype=xp.float32) - (n1 - 1) / 2) * du1
     u2 = (xp.arange(n2, dtype=xp.float32) - (n2 - 1) / 2) * du2
     cos = sdd / xp.sqrt(sdd**2 + u1[:, None] ** 2 + u2[None, :] ** 2)
+    step_ip = min(float(v) for v in knot_spec.step[:2])
+    w_cut = min(1.0, du1 * mag / step_ip)  # detector Nyquist at the isocenter
     yd = _dev(y).reshape(n_ang, n1, n2) * cos[None]
     q = xp.ascontiguousarray(xp.moveaxis(yd, 2, 1))  # ramp along u1
-    q = _filter_last_axis(q, n1, du1, window)
+    q = _filter_last_axis(q, n1, du1, window, w_cut)
     q = xp.moveaxis(q, 1, 2) / (cos[None] ** 2)
     b = _adjoint_explicit(ray_spec, knot_spec, order, q, Float)
     return b * (np.pi * du1 * du1 * du2 * sod / (n_ang * sdd))

@@ -221,6 +221,25 @@ def test_fbp_cone_bpf_raises():
                      sdd=2.8 * N2, method="bpf")
 
 
+def test_fbp_3d_oversampled_detector():
+    # detector sampled finer than the lattice: the scale carries 1/du2 and
+    # the ramp must stop at the lattice Nyquist (regression: values blew up
+    # as 1/du2 and more detector cells made reconstructions worse)
+    N3 = 64
+    zz, yy, xx = np.mgrid[:N3, :N3, :N3].astype(np.float32)
+    r2 = (xx - N3/2 + .5) ** 2 + (yy - N3/2 + .5) ** 2 + (zz - N3/2 + .5) ** 2
+    ph = (r2 < (0.3 * N3) ** 2).astype(np.float32)
+    knot = xtk.UniformSpec(start=(-N3 / 2 + 0.5,) * 3, step=1, num=(N3,) * 3)
+    rays = xtk.parallel_beam(dr.linspace(Float, 0, np.pi, 300, endpoint=False),
+                             xtk.DetectorSpec(size=(1.5 * N3, 1.5 * N3),
+                                              num_cell=(384, 256)))  # du 0.25 / 0.375
+    y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(ph.reshape(-1)))
+    rec = np.asarray(xtk.fbp(rays, knot, y)).reshape(N3, N3, N3)
+    inside = rec[r2 < (0.2 * N3) ** 2]
+    assert abs(inside.mean() - 1.0) < 0.05
+    assert _psnr(rec, ph) > 22
+
+
 def test_bpf_3d_anisotropic_detector():
     # the axial detector spacing enters the backprojection density (1/du2)
     N = 64
