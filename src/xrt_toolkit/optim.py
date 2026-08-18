@@ -205,12 +205,26 @@ def _ramp_rfft(n_det, du, window, w_cut=1.0):
     return L, H
 
 
-def _filter_last_axis(yd, n_det, du, window, w_cut=1.0):
-    """Ramp-filter a device array along its last axis (real FFTs, padded)."""
+def _filter_last_axis(yd, n_det, du, window, w_cut=1.0, max_bytes=1 << 30):
+    """Ramp-filter a device array along its last axis (real FFTs, padded).
+
+    Transformed in row blocks: the padded spectrum of a full 3D cone-beam
+    sinogram is several times the data itself, which needlessly caps the
+    problem size a GPU can handle. ``max_bytes`` bounds the transient.
+    """
     xp = _xp()
     L, H = _ramp_rfft(n_det, du, window, w_cut)
-    q = xp.fft.irfft(xp.fft.rfft(yd, n=L, axis=-1) * H, n=L, axis=-1)
-    return q[..., :n_det].astype(xp.float32)
+    flat = yd.reshape(-1, yd.shape[-1])
+    n_row = flat.shape[0]
+    per_row = L * 12                       # padded complex + padded real
+    chunk = max(1, min(n_row, int(max_bytes // per_row)))
+    out = xp.empty((n_row, n_det), dtype=xp.float32)
+    for a in range(0, n_row, chunk):
+        blk = xp.fft.irfft(xp.fft.rfft(flat[a:a + chunk], n=L, axis=-1) * H,
+                           n=L, axis=-1)
+        out[a:a + chunk] = blk[:, :n_det]
+        del blk
+    return out.reshape(yd.shape[:-1] + (n_det,))
 
 
 def _fov_mask(b, ray_spec, knot_spec, r_fov):
@@ -548,8 +562,11 @@ def fbp_cone(ray_spec, knot_spec, y, sod, sdd, window="hann",
     w_cut = min(1.0, du1 * mag / step_ip)  # detector Nyquist at the isocenter
     yd = _dev(y).reshape(n_ang, n1, n2) * cos[None]
     q = xp.ascontiguousarray(xp.moveaxis(yd, 2, 1))  # ramp along u1
-    q = _filter_last_axis(q, n1, du1, window, w_cut)
-    q = xp.ascontiguousarray(xp.moveaxis(q, 1, 2))
+    del yd
+    q2 = _filter_last_axis(q, n1, du1, window, w_cut)
+    del q
+    q = xp.ascontiguousarray(xp.moveaxis(q2, 1, 2))
+    del q2
     # detector-unit ramp -> isocenter units: sdd/sod
     b = _bp_voxel(q, ray_spec, knot_spec, divergent=True, sod=sod, sdd=sdd)
     u_half = abs(float(ray_spec[2].start[0])) + du1 / 2
