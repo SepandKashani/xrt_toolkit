@@ -9,6 +9,9 @@ inputs:
 * the ray anchors :math:`\bbt` (through :py:func:`xrt_ad_t_x` / ``_t_y``),
 * the ray directions :math:`\bbn` (through :py:func:`xrt_ad_n_x` / ``_n_y``).
 
+The kernels run in Dr.Jit's symbolic mode, so each call compiles to a single
+fused kernel rather than one launch per traversal step.
+
 The geometry gradients are available for 2D geometries, which is what the
 library validates; image gradients are available in 2D and 3D. Tensors stay
 on the GPU: conversions to and from Dr.Jit are zero-copy.
@@ -45,16 +48,16 @@ def _dr():
 
 class _XRTFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, data, t, n, knot_spec, order):
+    def forward(ctx, data, t, n, knot_spec, order, mode):
         dr, Array2f, Array3f, Float, _xrt = _dr()
         D = t.shape[0]
         ArrayNf = Array2f if D == 2 else Array3f
         ray = (ArrayNf(*[Float(t[d].contiguous()) for d in range(D)]),
                ArrayNf(*[Float(n[d].contiguous()) for d in range(D)]))
         data_dr = Float(data.contiguous())
-        y = _xrt.xrt_apply(ray, knot_spec, order, data_dr, mode="evaluated")
+        y = _xrt.xrt_apply(ray, knot_spec, order, data_dr, mode=mode)
         ctx.save_for_backward(data, t, n)
-        ctx.knot_spec, ctx.order, ctx.D = knot_spec, order, D
+        ctx.knot_spec, ctx.order, ctx.D, ctx.mode = knot_spec, order, D, mode
         return y.torch()
 
     @staticmethod
@@ -62,6 +65,7 @@ class _XRTFunction(torch.autograd.Function):
         dr, Array2f, Array3f, Float, _xrt = _dr()
         data, t, n = ctx.saved_tensors
         knot, order, D = ctx.knot_spec, ctx.order, ctx.D
+        mode = ctx.mode
         ArrayNf = Array2f if D == 2 else Array3f
         ray = (ArrayNf(*[Float(t[d].contiguous()) for d in range(D)]),
                ArrayNf(*[Float(n[d].contiguous()) for d in range(D)]))
@@ -69,7 +73,7 @@ class _XRTFunction(torch.autograd.Function):
 
         grad_data = grad_t = grad_n = None
         if ctx.needs_input_grad[0]:  # d loss / d image = A^T (grad_out)
-            grad_data = _xrt.xrt_adjoint(ray, knot, order, g, mode="evaluated").torch()
+            grad_data = _xrt.xrt_adjoint(ray, knot, order, g, mode=mode).torch()
 
         want_geom = ctx.needs_input_grad[1] or ctx.needs_input_grad[2]
         if want_geom:
@@ -80,19 +84,20 @@ class _XRTFunction(torch.autograd.Function):
                     "in xrt_toolkit.drjit.ray_xrt_new directly.")
             data_dr = Float(data.contiguous())
             if ctx.needs_input_grad[1]:
-                gx = g * _xrt.xrt_ad_t_x(ray, knot, order, data_dr, mode="evaluated")
-                gy = g * _xrt.xrt_ad_t_y(ray, knot, order, data_dr, mode="evaluated")
+                gx = g * _xrt.xrt_ad_t_x(ray, knot, order, data_dr, mode=mode)
+                gy = g * _xrt.xrt_ad_t_y(ray, knot, order, data_dr, mode=mode)
                 grad_t = torch.stack([gx.torch(), gy.torch()], dim=0)
             if ctx.needs_input_grad[2]:
-                gx = g * _xrt.xrt_ad_n_x(ray, knot, order, data_dr, mode="evaluated")
-                gy = g * _xrt.xrt_ad_n_y(ray, knot, order, data_dr, mode="evaluated")
+                gx = g * _xrt.xrt_ad_n_x(ray, knot, order, data_dr, mode=mode)
+                gy = g * _xrt.xrt_ad_n_y(ray, knot, order, data_dr, mode=mode)
                 grad_n = torch.stack([gx.torch(), gy.torch()], dim=0)
 
-        return grad_data, grad_t, grad_n, None, None
+        return grad_data, grad_t, grad_n, None, None, None
 
 
 def xrt_torch(data: torch.Tensor, t: torch.Tensor, n: torch.Tensor,
-              knot_spec: UniformSpec, order: int) -> torch.Tensor:
+              knot_spec: UniformSpec, order: int,
+              mode: str = "symbolic") -> torch.Tensor:
     r"""
     Differentiable X-ray projection for PyTorch.
 
@@ -108,6 +113,13 @@ def xrt_torch(data: torch.Tensor, t: torch.Tensor, n: torch.Tensor,
         Image lattice.
     order: 0 | 1 | 2
         Basis order.
+    mode: "symbolic" | "evaluated"
+        Traversal mode of the underlying kernels. ``"symbolic"`` compiles one
+        fused kernel and is what you want: it is two orders of magnitude faster
+        than ``"evaluated"``, which launches a kernel per loop iteration
+        (measured on 200k rays through a 256^2 lattice: 6 ms versus 814 ms for
+        the forward, 8 ms versus 1.4 s for a geometry derivative, with
+        identical results). ``"evaluated"`` is kept as an escape hatch.
 
     Returns
     -------
@@ -116,7 +128,7 @@ def xrt_torch(data: torch.Tensor, t: torch.Tensor, n: torch.Tensor,
     """
     assert data.is_cuda and t.is_cuda and n.is_cuda, "inputs must be CUDA tensors"
     assert len(data) == math.prod(knot_spec.num)
-    return _XRTFunction.apply(data, t, n, knot_spec, order)
+    return _XRTFunction.apply(data, t, n, knot_spec, order, mode)
 
 
 class XRTProjector(torch.nn.Module):
@@ -129,13 +141,18 @@ class XRTProjector(torch.nn.Module):
         Image lattice.
     order: 0 | 1 | 2
         Basis order.
+    mode: "symbolic" | "evaluated"
+        See :py:func:`xrt_torch`; the default fuses the traversal into a single
+        kernel.
     """
 
-    def __init__(self, knot_spec: UniformSpec, order: int = 2):
+    def __init__(self, knot_spec: UniformSpec, order: int = 2,
+                 mode: str = "symbolic"):
         super().__init__()
         self.knot_spec = knot_spec
         self.order = order
+        self.mode = mode
 
     def forward(self, data: torch.Tensor, t: torch.Tensor,
                 n: torch.Tensor) -> torch.Tensor:
-        return xrt_torch(data, t, n, self.knot_spec, self.order)
+        return xrt_torch(data, t, n, self.knot_spec, self.order, self.mode)

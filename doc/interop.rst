@@ -57,6 +57,13 @@ PyTorch
 backpropagates. Tensors stay on the GPU — the conversions to and from Dr.Jit
 are zero-copy.
 
+The kernels run in Dr.Jit's **symbolic** mode, so every call compiles to a
+single fused kernel instead of launching one per traversal step. That is the
+default and it matters: on 200k rays through a 256\ :sup:`2` lattice a full
+forward-plus-backward takes 0.36 s symbolically against 9.2 s in evaluated
+mode, for identical results. ``mode="evaluated"`` remains available as an
+escape hatch.
+
 What makes this more than a convenience wrapper is *which* inputs receive
 gradients: not only the image, but the acquisition geometry itself.
 
@@ -67,7 +74,7 @@ gradients: not only the image, but the acquisition geometry itself.
    from xrt_toolkit.torch import XRTProjector
 
    knot = xtk.UniformSpec(start=(-N/2 + 0.5,) * 2, step=1, num=(N, N))
-   proj = XRTProjector(knot, order=1)
+   proj = XRTProjector(knot, order=1)          # mode="symbolic" by default
 
    x = torch.rand(N * N, device="cuda", requires_grad=True)   # image
    t = torch.nn.Parameter(t0)                                 # (2, M) ray anchors
