@@ -19,7 +19,7 @@ algorithms.
 .. toctree::
    :maxdepth: 2
 
-   theory
+   transform
    geometry
    interop
    tutorials

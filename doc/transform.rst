@@ -1,8 +1,8 @@
-Theory
-======
-
 The X-ray transform
--------------------
+===================
+
+Definition and discretisation
+-----------------------------
 
 The library discretises the X-ray transform of a function
 :math:`f: \mathbb{R}^{D} \to \mathbb{R}`, :math:`D \in \{2, 3\}`, along a ray
