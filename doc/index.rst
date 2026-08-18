@@ -54,6 +54,7 @@ gradient descent, not just the image.
    transform
    geometry
    interop
+   pitfalls
    performance
    tutorials
    api
