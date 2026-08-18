@@ -39,8 +39,15 @@ try:  # probe with a real transform: a CuPy whose cuFFT library cannot be
     # crash at the first reconstruction.
     import cupy as _cp
     _cp.fft.rfft(_cp.ones(4, dtype=_cp.float32))
-except Exception:
+except Exception as _e:  # pragma: no cover - environment dependent
+    import warnings
     _cp = None
+    warnings.warn(
+        "xrt_toolkit.optim: CuPy is unusable "
+        f"({type(_e).__name__}: {_e}); Fourier filtering falls back to NumPy "
+        "on the host, which costs a device round-trip per reconstruction. "
+        "Install a CuPy matching your CUDA version for the GPU path.",
+        RuntimeWarning, stacklevel=2)
 
 
 # ------------------------------------------------------------- iterative ----

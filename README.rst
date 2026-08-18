@@ -29,6 +29,10 @@ Compatibility
 - Dr.Jit 1.4+ requires an NVIDIA GPU of compute capability 7.5 or newer
   (Turing and later) and driver R535+. On older GPUs (e.g. V100/Volta),
   install ``drjit<1.4``; the toolkit supports both.
+- ``xrt_toolkit.optim`` filters on the GPU through CuPy (cuFFT). If CuPy is
+  missing or built against a different CUDA version than the driver, filtering
+  falls back to NumPy on the host and warns; install a CuPy matching your CUDA
+  (``cupy-cuda11x`` / ``cupy-cuda12x``) for the GPU path.
 - The fast path of the 3D spline basis (``order`` > 0 in 3D) evaluates a small
   network with cooperative vectors, which need a Turing-or-newer GPU and
   driver R570+. Where unavailable, the toolkit automatically falls back to an
