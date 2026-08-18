@@ -39,6 +39,8 @@ Compatibility
 Installation
 ------------
 
+Requires Python >= 3.10, < 3.14.
+
 .. code-block:: bash
 
    pip install "xrt_toolkit@git+https://github.com/SepandKashani/xrt_toolkit.git@v2"
@@ -47,6 +49,11 @@ Installation
    git clone --branch v2 https://github.com/SepandKashani/xrt_toolkit.git
    cd xrt_toolkit/
    pip install -e ".[viz,dev]"
+
+   # pre-Turing GPUs (compute capability < 7.5, e.g. V100) only:
+   # pip resolves Dr.Jit 1.4+, which hangs at import on such GPUs instead of
+   # reporting an error. Downgrade after either install above.
+   pip install "drjit<1.4"
 
 Getting started
 ---------------
