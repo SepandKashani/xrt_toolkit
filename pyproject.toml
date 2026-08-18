@@ -44,6 +44,7 @@ viz = [
 doc = [
     "sphinx >= 8, < 10",
     "furo",
+    "myst-nb",          # renders the tutorial notebooks
 ]
 dev = [
     "hatch >= 1.14, < 2",

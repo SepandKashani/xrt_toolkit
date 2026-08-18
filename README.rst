@@ -84,6 +84,11 @@ Documentation
    pip install -e ".[doc]"
    python -m sphinx doc doc/_build/html      # then open doc/_build/html/index.html
 
-The API reference is generated from the docstrings. The build needs the real
-dependencies installed but no GPU: Dr.Jit imports without a CUDA device, so
-Read the Docs builds it from ``.readthedocs.yaml`` unchanged.
+The pages are: a theory chapter (transform, bases, adjoint, FBP/FDK filters,
+geometry derivatives), a geometry chapter, both tutorial notebooks rendered
+with their stored outputs, and an API reference generated from the docstrings.
+
+The build needs the real dependencies installed but no GPU: Dr.Jit imports
+without a CUDA device, so Read the Docs builds it from ``.readthedocs.yaml``
+unchanged. The figures are committed under ``doc/_static`` and regenerated with
+``python doc/make_figures.py``, which *does* need a GPU.

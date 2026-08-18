@@ -9,7 +9,14 @@ extensions = [
     "sphinx.ext.mathjax",      # render the :math: roles
     "sphinx.ext.viewcode",     # "source" links next to each object
     "sphinx.ext.intersphinx",  # link numpy/python types
+    "myst_nb",                 # render the tutorial notebooks
 ]
+
+# Notebooks are shown with the outputs they were committed with: the builder has
+# no GPU, so executing them here is neither possible nor desirable.
+nb_execution_mode = "off"
+myst_enable_extensions = ["dollarmath", "amsmath"]
+suppress_warnings = ["mystnb.unknown_mime_type"]
 
 # Work from a source checkout without installing the package first.
 import sys
@@ -38,6 +45,7 @@ intersphinx_mapping = {
 
 html_theme = "furo"
 html_title = f"{project} {release}"
+html_static_path = ["_static"]
 
 # The library docstrings use LaTeX macros; define the ones they rely on.
 mathjax3_config = {
