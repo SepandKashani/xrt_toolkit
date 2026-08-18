@@ -1,21 +1,21 @@
 Performance
 ===========
 
-All figures below were measured on an NVIDIA A100 (80 GB) with Dr.Jit 1.2,
-best of several runs after warm-up, with an explicit device synchronisation
-inside the timed region.
+All figures come from an NVIDIA A100 with 80 GB, running Dr.Jit 1.2. Each is
+the best of several runs after warm-up, timed with a device synchronisation
+inside the measured region.
 
 Scale
 -----
 
 .. list-table::
    :header-rows: 1
-   :widths: 40 30 30
+   :widths: 44 30 26
 
    * - Problem
      - Operation
      - Time
-   * - 256\ :sup:`3` volume, 360 x 384\ :sup:`2` detector (53 M rays)
+   * - 256\ :sup:`3` volume, 360 x 384\ :sup:`2` detector, 53 M rays
      - forward projection
      - 0.07 s
    * -
@@ -24,26 +24,25 @@ Scale
    * -
      - ``cg``, 10 iterations
      - 1.6 s
-   * - 512\ :sup:`3` volume, 720 x 768\ :sup:`2` detector (425 M rays)
+   * - 512\ :sup:`3` volume, 720 x 768\ :sup:`2` detector, 425 M rays
      - forward projection
      - 0.7 s
    * -
      - ``fbp``
      - 3.5 s
-   * - 640 x 640 x 836 volume, 800 x 920 x 728 real cone-beam scan
-     - ``fbp_cone`` (FDK)
+   * - 640 x 640 x 836 volume, real 800-view cone-beam scan
+     - ``fbp_cone``
      - 3.4 s
 
-The forward projector sustains roughly 200 G cell-visits per second, and about
-52 G voxel-updates per second in the analytic backprojector.
+The forward projector sustains about 200 G cell visits per second. The
+analytic backprojector reaches about 52 G voxel updates per second.
 
-Choosing an interface
----------------------
+Choice of interface
+-------------------
 
-The structured operators loop over projections and launch one kernel each:
-memory-lean for a single pass, but the launch overhead dominates inside a
-solver. :py:func:`~xrt_toolkit.struct_rays` expands the same scan into explicit
-rays so the fused single-kernel operators can be used instead.
+Structured operators launch one kernel per projection.
+:py:func:`~xrt_toolkit.struct_rays` expands the same scan into explicit rays,
+so the fused operators apply.
 
 .. list-table::
    :header-rows: 1
@@ -55,17 +54,17 @@ rays so the fused single-kernel operators can be used instead.
    * - ``xrt_struct_apply``
      - 123
      - 1.0
-   * - ``struct_rays`` + ``xrt_apply``
+   * - ``struct_rays`` and ``xrt_apply``
      - 1
-     - ~0.01
+     - about 0.01
 
 Backprojection
 --------------
 
-The analytic methods use a voxel-driven interpolating backprojector; the
-matched exact-chord adjoint is reserved for the iterative solvers, where the
-pair must be adjoint. The interpolating kernel only gathers, so it avoids the
-atomic contention a scattering adjoint pays:
+The analytic methods use a voxel-driven interpolating backprojector. The
+matched chord adjoint stays inside the iterative solvers, where the pair must
+be adjoint. The interpolating kernel only gathers, so it avoids the atomic
+contention a scattering adjoint pays.
 
 .. list-table::
    :header-rows: 1
@@ -81,13 +80,12 @@ atomic contention a scattering adjoint pays:
      - 33.9 ms
      - 128.4 ms
 
-Symbolic versus evaluated
--------------------------
+Symbolic against evaluated
+--------------------------
 
-Dr.Jit can trace a traversal into a single fused kernel (*symbolic*) or run it
-one launch per step (*evaluated*). Everything in the library is symbolic by
-default, and the difference is not subtle — 200k rays through a 256\ :sup:`2`
-lattice:
+Dr.Jit can trace a traversal into one kernel, which it calls symbolic mode. It
+can also run it one launch per step, which it calls evaluated. Everything here
+is symbolic by default. On 200k rays through a 256\ :sup:`2` lattice:
 
 .. list-table::
    :header-rows: 1
@@ -109,14 +107,16 @@ lattice:
      - 1654 ms
      - 12.5 ms
 
-Against other packages
-----------------------
+Against mumott
+--------------
 
-Compared with `mumott <https://mumott.org>`_'s ``SAXSProjectorCUDA`` on the
-same tensor-tomography problem (6 coefficient channels, 8 detector segments,
-real IRTT geometries). mumott splits the model into a projector and a
-basis-set contraction; this library fuses both into one lattice traversal, so
-the fair comparison is against the sum of its two stages:
+The comparison uses `mumott <https://mumott.org>`_'s ``SAXSProjectorCUDA`` on
+the same tensor-tomography problem: 6 channels, 8 detector segments, and the
+IRTT geometries of Gao and co-workers [gao2019]_.
+
+mumott splits the model into a projector and a basis-set contraction. This
+library fuses both into one traversal, so the fair comparison is against the
+sum of its two stages.
 
 .. list-table::
    :header-rows: 1
@@ -125,23 +125,23 @@ the fair comparison is against the sum of its two stages:
    * - Full forward model
      - mumott
      - XTK
-     - Speed-up
+     - Ratio
    * - 53 k voxels, 399 k rays
      - 6.2 ms
      - 0.75 ms
-     - 8.3x
+     - 8.3
    * - 232 k voxels, 883 k rays
      - 11.9 ms
      - 1.13 ms
-     - 10.6x
+     - 10.6
 
-The adjoint is closer: 2.0x and 1.6x respectively. mumott's backprojector is
-voxel-driven and needs no atomics, which is the better design for pure
-backprojection at large volumes — worth saying plainly.
+The adjoint is closer, at 2.0 and 1.6. On the larger bone volume mumott wins.
+Its backprojector is voxel-driven and needs no atomics, which is the better
+design for pure backprojection at that size.
 
 Reproducing
 -----------
 
-The timings come from scripts in the repository's experiment tree rather than
-from this documentation, so they are not regenerated on a docs build. Treat
-them as an order of magnitude: they move with GPU, driver and Dr.Jit version.
+These timings come from scripts in the experiment tree, not from the
+documentation build. Treat them as orders of magnitude. They move with the
+GPU, the driver and the Dr.Jit version.

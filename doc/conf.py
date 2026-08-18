@@ -17,6 +17,7 @@ extensions = [
 # Notebooks are shown with the outputs they were committed with: the builder has
 # no GPU, so executing them here is neither possible nor desirable.
 nb_execution_mode = "off"
+exclude_patterns = ["_build", "jupyter_execute"]
 myst_enable_extensions = ["dollarmath", "amsmath"]
 suppress_warnings = ["mystnb.unknown_mime_type"]
 

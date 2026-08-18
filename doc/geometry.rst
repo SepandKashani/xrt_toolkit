@@ -1,49 +1,48 @@
 Geometries
 ==========
 
-A geometry is just a set of rays. The library takes them two ways, and both
-feed the same kernels.
+A geometry is a set of rays. The library takes them two ways. Both feed the
+same kernels.
 
 Explicit rays
 -------------
 
-Any pair of arrays — a point :math:`\mathbf{t}` and a direction
-:math:`\mathbf{n}` per ray — is a valid geometry. Nothing has to be regular,
-which is what listmode PET, sparse plasma diagnostics or a
-calibration-in-progress need.
+Any pair of arrays is a geometry: a point :math:`\mathbf{t}` and a direction
+:math:`\mathbf{n}` for each ray. Nothing has to be regular. Listmode PET,
+sparse plasma diagnostics and a scanner you are still calibrating all fit.
 
 .. figure:: _static/geom_explicit.png
    :width: 60%
 
-   Three arbitrary rays, drawn with :py:func:`~xrt_toolkit.plot_rays`.
+   Three arbitrary rays, drawn by :py:func:`~xrt_toolkit.plot_rays`.
 
 Structured scans
 ----------------
 
 :py:func:`~xrt_toolkit.parallel_beam` and :py:func:`~xrt_toolkit.cone_beam`
 build standard acquisitions from a list of angles and a
-:py:class:`~xrt_toolkit.DetectorSpec`. They store one homogeneous matrix per
-projection rather than every ray, so memory stays flat as the scan grows.
+:py:class:`~xrt_toolkit.DetectorSpec`. They store one matrix per projection
+rather than every ray, so memory stays flat as the scan grows.
 
 .. list-table::
    :widths: 50 50
 
    * - .. figure:: _static/geom_parallel.png
 
-          ``parallel_beam`` — angles span :math:`[0, \pi)`
+          ``parallel_beam``, angles over :math:`[0, \pi)`
      - .. figure:: _static/geom_cone.png
 
-          ``cone_beam`` — a full circle, ``sod`` / ``sdd``
+          ``cone_beam``, a full circle, ``sod`` and ``sdd``
 
-Which interface to use
-----------------------
+Which one to use
+----------------
 
-The structured operators (:py:func:`~xrt_toolkit.xrt_struct_apply`) loop over
-projections and launch one kernel each: memory-lean for a single pass, but the
-launch overhead dominates inside a solver. :py:func:`~xrt_toolkit.struct_rays`
-expands a structured scan into explicit rays in the same order, so the fused
-single-kernel operators can be used instead — around a hundred times faster per
-iteration, at the cost of storing every ray.
+The structured operators loop over projections and launch one kernel each.
+That is fine for a single pass. Inside a solver the launch overhead dominates.
+
+:py:func:`~xrt_toolkit.struct_rays` expands a structured scan into explicit
+rays in the same order. You then call the fused operators, which run about a
+hundred times faster per iteration. The cost is memory: every ray is stored.
 
 .. code-block:: python
 

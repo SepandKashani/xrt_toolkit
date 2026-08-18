@@ -1,18 +1,17 @@
 XRT Toolkit
 ===========
 
-GPU X-ray transforms and reconstruction, compiled with `Dr.Jit
+GPU X-ray transforms and reconstruction, built on `Dr.Jit
 <https://drjit.readthedocs.io>`_.
 
-A forward projector and its **exact matched adjoint** for arbitrary sets of
-rays in 2-D and 3-D, on box-spline bases, **differentiable with respect to the
-acquisition geometry** — so the scan itself can be calibrated or optimised by
-gradient descent, not just the image.
+The library projects a volume along any set of rays and applies the exact
+transpose of that projection. Both work in 2-D and 3-D, on box-spline bases.
+Both are differentiable with respect to the rays themselves, so you can fit
+the scan geometry as well as the image.
 
 .. figure:: _static/forward_adjoint.png
 
-   The operator pair: an image, its sinogram, and the backprojection of that
-   sinogram.
+   An image, its sinogram, and the backprojection of that sinogram.
 
 .. grid:: 2
    :gutter: 3
@@ -21,24 +20,23 @@ gradient descent, not just the image.
       :link: geometry
       :link-type: doc
 
-      Parallel, fan and cone scans from one call — or hand the projector an
-      arbitrary list of rays. Listmode PET and half-calibrated benchtop scanners
-      are first-class, not special cases.
+      Parallel, fan and cone scans come from one call. You can also pass a
+      plain list of rays. Listmode PET and an uncalibrated benchtop scanner
+      need no special case.
 
    .. grid-item-card:: Differentiable acquisition
       :link: transform
       :link-type: doc
 
-      Analytic derivatives with respect to ray positions *and* directions, so a
-      detector offset or a centre of rotation can be a learnable parameter.
+      Derivatives with respect to ray positions and directions. A detector
+      offset or a centre of rotation can be a learnable parameter.
 
    .. grid-item-card:: Reconstruction included
       :link: api
       :link-type: doc
 
-      ``fbp``, ``fbp_cone`` (FDK), ``bpf``, ``cg`` and ``gd`` — filtering on the
-      GPU, quantitatively calibrated, a 640\ :sup:`3` cone-beam volume in
-      seconds.
+      ``fbp``, ``fbp_cone``, ``bpf``, ``cg`` and ``gd``. Filtering runs on the
+      GPU. A 640\ :sup:`3` cone-beam volume takes 3.4 s.
 
    .. grid-item-card:: Beyond attenuation
       :link: api
@@ -51,13 +49,17 @@ gradient descent, not just the image.
    :maxdepth: 2
    :hidden:
 
+   gallery
    transform
    geometry
    interop
    pitfalls
    performance
+   alternatives
    tutorials
    api
+   citing
+   bibliography
 
 Installation
 ------------
@@ -66,11 +68,11 @@ Installation
 
    pip install "xrt_toolkit@git+https://github.com/SepandKashani/xrt_toolkit.git@v2"
 
-A CUDA GPU is required. Dr.Jit 1.4+ needs compute capability 7.5 or newer; on
-older cards (V100) install ``drjit<1.4``.
+You need a CUDA GPU. Dr.Jit 1.4 requires compute capability 7.5 or newer. On
+older cards such as the V100, install ``drjit<1.4``.
 
-Sixty seconds in
-----------------
+First steps
+-----------
 
 .. code-block:: python
 
@@ -84,8 +86,7 @@ Sixty seconds in
                             xtk.DetectorSpec(size=(1.5 * N,), num_cell=(192,)))
 
    sino = xtk.xrt_struct_apply(rays, knot, 0, Float(image.reshape(-1)))
-   rec = xtk.fbp(rays, knot, sino)          # filtered backprojection
-   rec = xtk.cg(A, At, sino, N * N, 20)     # or solve it iteratively
+   rec = xtk.fbp(rays, knot, sino)
 
-Then read :doc:`transform` for what the operators actually compute, or jump
-straight to the :doc:`tutorials`.
+Read :doc:`transform` for what the operators compute. Or open the
+:doc:`tutorials`.
