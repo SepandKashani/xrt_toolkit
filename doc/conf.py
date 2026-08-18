@@ -11,13 +11,20 @@ extensions = [
     "sphinx.ext.intersphinx",  # link numpy/python types
 ]
 
-# Importing the package needs a CUDA device; on a machine or CI runner without
-# one, mock the GPU dependencies so the docstrings can still be extracted.
-autodoc_mock_imports = []
-try:
-    import xrt_toolkit  # noqa: F401
-except Exception:
-    autodoc_mock_imports = ["drjit", "cupy", "torch", "astra"]
+# Work from a source checkout without installing the package first.
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+# autodoc imports the package to read its docstrings. Dr.Jit itself imports
+# fine without a CUDA device (only creating arrays needs one) and the
+# GPU-dependent module-level work is guarded, so a builder with no GPU — Read
+# the Docs, GitHub Actions — works as long as the real dependencies are
+# installed. `autodoc_mock_imports` is deliberately NOT used as a substitute:
+# mocking Dr.Jit breaks the module-level type unions (`dr.ArrayBase | bool`),
+# autodoc then imports nothing, and the API page silently comes out empty.
+# `fail_on_warning` in .readthedocs.yaml turns that failure mode into a red
+# build instead of a published empty page.
 
 autodoc_member_order = "bysource"
 autodoc_typehints = "none"        # signatures stay readable; types are in the docstrings

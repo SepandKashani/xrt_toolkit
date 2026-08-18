@@ -84,6 +84,6 @@ Documentation
    pip install -e ".[doc]"
    python -m sphinx doc doc/_build/html      # then open doc/_build/html/index.html
 
-The API reference is generated from the docstrings. ``doc/conf.py`` mocks the
-GPU dependencies when the package cannot be imported, so the build also works
-on a machine without CUDA.
+The API reference is generated from the docstrings. The build needs the real
+dependencies installed but no GPU: Dr.Jit imports without a CUDA device, so
+Read the Docs builds it from ``.readthedocs.yaml`` unchanged.
