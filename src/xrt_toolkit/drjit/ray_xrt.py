@@ -121,7 +121,7 @@ def xrt_apply(
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -874,7 +874,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -1056,7 +1056,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -1271,7 +1271,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -1455,7 +1455,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -1677,7 +1677,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -1879,7 +1879,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -2095,7 +2095,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with
@@ -2297,7 +2297,7 @@ mode = "symbolic"
 
        f(\bbx)
        =
-       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+       \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
        f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
 
     with

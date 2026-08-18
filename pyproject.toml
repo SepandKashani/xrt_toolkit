@@ -45,6 +45,8 @@ doc = [
     "sphinx >= 8, < 10",
     "furo",
     "myst-nb",          # renders the tutorial notebooks
+    "sphinx-copybutton",
+    "sphinx-design",
 ]
 dev = [
     "hatch >= 1.14, < 2",

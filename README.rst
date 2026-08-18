@@ -86,8 +86,8 @@ Documentation
 
 The pages are: the X-ray transform (definition and discretisation, bases,
 adjoint, FBP/FDK filters, geometry derivatives), geometries,
-interoperability, both tutorial notebooks rendered with their stored outputs,
-and an API reference generated from the docstrings.
+interoperability, measured performance, both tutorial notebooks rendered with
+their stored outputs, and an API reference generated from the docstrings.
 
 The build needs the real dependencies installed but no GPU: Dr.Jit imports
 without a CUDA device, so Read the Docs builds it from ``.readthedocs.yaml``

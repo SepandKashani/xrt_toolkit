@@ -10,6 +10,8 @@ extensions = [
     "sphinx.ext.viewcode",     # "source" links next to each object
     "sphinx.ext.intersphinx",  # link numpy/python types
     "myst_nb",                 # render the tutorial notebooks
+    "sphinx_copybutton",       # copy button on every code block
+    "sphinx_design",           # cards and grids on the landing page
 ]
 
 # Notebooks are shown with the outputs they were committed with: the builder has
@@ -46,6 +48,12 @@ intersphinx_mapping = {
 html_theme = "furo"
 html_title = f"{project} {release}"
 html_static_path = ["_static"]
+html_theme_options = {
+    "source_repository": "https://github.com/SepandKashani/xrt_toolkit/",
+    "source_branch": "v2",
+    "source_directory": "doc/",
+}
+copybutton_exclude = ".linenos, .gp, .go"      # skip prompts and output lines
 
 # The library docstrings use LaTeX macros; define the ones they rely on.
 mathjax3_config = {
@@ -56,7 +64,10 @@ mathjax3_config = {
             "bbZ": r"\mathbb{Z}", "bR": r"\mathbb{R}", "bbQ": r"\mathbf{Q}",
             "bbDelta": r"\boldsymbol{\Delta}", "bbZero": r"\mathbf{0}",
             "bbH": r"\mathbf{H}", "bbb": r"\mathbf{b}", "bbT": r"\mathbf{T}",
-            "discreteRange": [r"\{#1, \ldots, #2\}", 2],
+            "bbA": r"\mathbf{A}", "bbu": r"\mathbf{u}", "bbm": r"\mathbf{m}",
+            "diag": r"\operatorname{diag}",
+            "xrt": r"\mathcal{P}",
+            "discreteRange": [r"\left\{#1, \ldots, #2\right\}", 2],
         }
     }
 }
