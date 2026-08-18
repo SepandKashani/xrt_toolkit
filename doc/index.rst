@@ -21,6 +21,7 @@ algorithms.
 
    theory
    geometry
+   interop
    tutorials
    api
 

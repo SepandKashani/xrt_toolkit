@@ -37,6 +37,16 @@ Tensor tomography
 .. autofunction:: xrt_toolkit.xrt_tensor_adjoint
 .. autofunction:: xrt_toolkit.lrt_weights
 
+Interoperability
+----------------
+
+.. autofunction:: xrt_toolkit.from_astra
+.. autofunction:: xrt_toolkit.interop.vol_astra_to_xtk
+.. autofunction:: xrt_toolkit.interop.vol_xtk_to_astra
+
+.. automodule:: xrt_toolkit.torch
+   :members: XRTProjector, xrt_torch
+
 Diagnostics
 -----------
 

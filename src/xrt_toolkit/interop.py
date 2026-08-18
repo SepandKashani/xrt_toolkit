@@ -81,7 +81,7 @@ def vol_astra_to_xtk(vol: np.ndarray) -> np.ndarray:
     Returns
     -------
     flat: np.ndarray
-        (nx*ny[*nz],) flattened XTK coefficient array.
+        ``(nx*ny[*nz],)`` flattened XTK coefficient array.
     """
     if vol.ndim == 2:
         return np.ascontiguousarray(vol[::-1, :].T).ravel()
