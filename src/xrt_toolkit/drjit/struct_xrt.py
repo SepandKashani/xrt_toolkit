@@ -106,7 +106,7 @@ def xrt_struct_apply(
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
-        The (N_proj, *ray_u_spec.num) mesh-points are serialized in C-order.
+        The ``(N_proj, *ray_u_spec.num)`` mesh-points are serialized in C-order.
 
     Returns
     -------
@@ -217,7 +217,7 @@ def xrt_struct_adjoint(
         The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
     data: FloatT
         (L,) projections :math:`g_{l} \in \bR`.
-        The (N_proj, *ray_u_spec.num) mesh-points are serialized in C-order.
+        The ``(N_proj, *ray_u_spec.num)`` mesh-points are serialized in C-order.
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
 

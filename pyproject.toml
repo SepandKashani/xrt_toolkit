@@ -41,6 +41,10 @@ viz = [
     "matplotlib >= 3.10, < 4",
     "scipy >= 0.17, < 2",
 ]
+doc = [
+    "sphinx >= 8, < 10",
+    "furo",
+]
 dev = [
     "hatch >= 1.14, < 2",
     "pre-commit >= 4.1, < 5",
@@ -53,14 +57,14 @@ dev = [
     "torch >= 2, < 3",
 ]
 all = [
-    "xrt_toolkit[viz,dev]",
+    "xrt_toolkit[viz,dev,doc]",
 ]
 
 # sdist/wheel config ==========================================================
 [tool.hatch.build]
 exclude = [
     "/dev",
-    "/doc",
+    "/doc",   # docs are built from source, not shipped in the wheel
     "/src/xrt_toolkit_tests",
 ]
 include = [

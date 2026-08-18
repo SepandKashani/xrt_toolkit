@@ -12,7 +12,7 @@ def parallel_beam(
     r"""
     Create parallel/cylinder-beam structured ray specification.
 
-    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.drjit.xrt_struct_apply` or :py:`~xrt_toolkit.drjit.xrt_struct_adjoint`.
+    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.drjit.xrt_struct_apply` or :py:func:`~xrt_toolkit.drjit.xrt_struct_adjoint`.
 
     Parameters
     ----------
@@ -94,7 +94,7 @@ def cone_beam(
     r"""
     Create fan/cone-beam structured ray specification.
 
-    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.drjit.xrt_struct_apply` or :py:`~xrt_toolkit.drjit.xrt_struct_adjoint`.
+    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.drjit.xrt_struct_apply` or :py:func:`~xrt_toolkit.drjit.xrt_struct_adjoint`.
 
     Parameters
     ----------
