@@ -24,9 +24,9 @@ Paper
 
 A paper describing the library is in preparation:
 
-   S. Kashani, Y. Haouchat, A. Boquet-Pujadas and M. Unser, *XTK: a fast
-   differentiable library for tomographic projections with arbitrary
-   geometries*.
+   Y. Haouchat, S. Kashani, P. Thévenaz, M. Unser and A. Boquet-Pujadas,
+   *XTK: a fast differentiable library for tomographic projections with
+   arbitrary geometries*.
 
 Please cite the paper once it appears, and the software entry above meanwhile.
 
