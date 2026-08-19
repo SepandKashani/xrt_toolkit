@@ -114,11 +114,11 @@ def gallery_cone():
     N = 192
     ph = _ellipsoids(N)
     ks = xtk.UniformSpec(start=(-N / 2 + 0.5,) * 3, step=1, num=(N,) * 3)
-    sod, sdd = 3.0 * N, 5.0 * N
+    sod, sdd = 8.0 * N, 10.0 * N          # a gentle cone: 4 degree half-angle
     rays = xtk.cone_beam(sod=sod, sdd=sdd,
-                         angles=dr.linspace(Float, 0, 2 * np.pi, 360, endpoint=False),
-                         detector_spec=xtk.DetectorSpec(size=(2.4 * N, 2.4 * N),
-                                                        num_cell=(288, 288)))
+                         angles=dr.linspace(Float, 0, 2 * np.pi, 720, endpoint=False),
+                         detector_spec=xtk.DetectorSpec(size=(1.6 * N, 1.6 * N),
+                                                        num_cell=(384, 384)))
     y = xtk.xrt_apply(xtk.struct_rays(rays), ks, 0, Float(ph.reshape(-1)))
     rec = np.asarray(xtk.fbp_cone(rays, ks, y, sod=sod, sdd=sdd,
                                   window="shepp-logan")).reshape(N, N, N)

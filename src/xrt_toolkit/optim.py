@@ -384,7 +384,7 @@ def _bp_voxel(q, ray_spec, knot_spec, divergent=False, sod=None, sdd=None):
 
 def _bpf_core(ray_spec, knot_spec, y, margin, mag, const, window="hann"):
     """Voxel-driven backprojection of the raw data on an enlarged lattice,
-    coverage taper, in-plane Hann-limited |k| filter, crop, scale."""
+    coverage taper, in-plane Hann-limited frequency filter, crop, scale."""
     from .util import UniformSpec
 
     Float = type(y)

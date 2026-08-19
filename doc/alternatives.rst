@@ -52,6 +52,16 @@ This page says where this library differs, and where the others are better.
 What this library does better
 -----------------------------
 
+**Rays are the input, not a grid.** Any list of positions and directions is a
+geometry. Listmode PET, a tilt series with missing angles, a scanner you are
+still aligning: none of them needs a special case, and none needs a regular
+grid. Two helpers build parallel and cone scans when you do want one.
+
+**Bases beyond voxels.** ``order`` selects a box spline of order 0, 1 or 2.
+Order 0 gives the usual chord lengths. Orders 1 and 2 are smoother, and their
+projections are computed in closed form rather than sampled. No other package
+here offers a choice.
+
 **The adjoint is the transpose.** The same traversal visits the same cells
 with the same weights, and scatters instead of gathering. Iterative solvers
 need that identity, and the test suite checks it to machine precision.
@@ -59,8 +69,6 @@ need that identity, and the test suite checks it to machine precision.
 **The geometry is differentiable.** You get analytic derivatives with respect
 to ray positions and directions. That turns calibration into an optimisation
 problem. No other package on this list offers it.
-
-**Rays are a first-class input.** Nothing has to lie on a grid.
 
 **Multi-channel operators are fused.** Tensor tomography traverses the lattice
 once for all channels. On the IRTT problem the full forward model runs 8 to 11
