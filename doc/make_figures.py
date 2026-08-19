@@ -277,7 +277,8 @@ def geometry_schematics_3d():
             d = np.array([xd, y, z]) - src
             _ray3(ax, src, src + d, PURPLE, lw=0.9, dot=0)
     ax.scatter(*src, color=PURPLE, s=42, depthshade=False, zorder=5)
-    ax.text(src[0], 0.12, 0.34, "source", color=PURPLE, fontsize=9)
+    ax.text(src[0] - 0.95, 0.10, 0.30, "source", color=PURPLE,
+            fontsize=9)
     _plane(ax, (xd, 0, 0), (0, 1, 0), (0, 0, 1), 1.0, 1.0, PURPLE)
     ax.text(xd, -1.35, -1.30, "detector", color=PURPLE, fontsize=9)
     ax.plot([0, 0], [0, 0], [-1.75 * B, 1.75 * B], color="#57606a", lw=1.0,
