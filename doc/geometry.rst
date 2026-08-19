@@ -5,14 +5,51 @@ A geometry is a set of rays: a point and a direction for each one. You can
 build the standard scans with a helper, or pass rays yourself. Both feed the
 same kernels.
 
+Detector conventions
+--------------------
+
+Every helper takes a :py:class:`~xrt_toolkit.DetectorSpec`. It holds a physical
+``size`` and a cell count ``num_cell``, one entry per detector axis: one axis
+for a 2-D scan, two for a 3-D scan.
+
+.. figure:: _static/schem_detector.svg
+   :width: 92%
+
+   ``size`` is the full width of the detector, not the cell pitch. The pitch
+   follows as ``size[k] / num_cell[k]``.
+
+Three rules cover the rest.
+
+* Cells are centred, so cell ``i`` sits at :math:`(i - (N-1)/2) \times`
+  ``cell_size``. The beam axis passes through the middle of the detector, which
+  falls between two cells when ``num_cell`` is even.
+* ``u1`` spans lattice axis 2, ``u2`` spans lattice axis 3. In 3-D that makes
+  ``u2`` the rotation axis, so ``size[1]`` sets the axial coverage.
+* The projection is laid out ``(angles, u1, u2)``, with ``u2`` fastest. Reshape
+  a sinogram to that order and nothing else needs to change.
+
+Units are yours. Pass millimetres and the volume must be in millimetres too.
+Voxel units are the safer default in single precision; see :doc:`pitfalls`.
+
 Parallel beam
 -------------
 
-.. figure:: _static/schem_parallel.svg
-   :width: 46%
+.. grid:: 1 2 2 2
+   :gutter: 3
 
-   One angle of a parallel scan. Every ray shares a direction; the whole
-   assembly rotates about the volume.
+   .. grid-item::
+
+      .. figure:: _static/schem_parallel.svg
+
+         One angle of a 2-D scan. Every ray shares a direction, and the whole
+         assembly rotates about the volume.
+
+   .. grid-item::
+
+      .. figure:: _static/schem_parallel_3d.svg
+
+         The 3-D scan. The detector gains a second axis along the rotation
+         axis; the rays stay parallel.
 
 .. code-block:: python
 
@@ -28,11 +65,22 @@ and the same call becomes a 3-D scan that rotates about the third lattice axis.
 Cone beam
 ---------
 
-.. figure:: _static/schem_cone.svg
-   :width: 62%
+.. grid:: 1 2 2 2
+   :gutter: 3
 
-   A point source, a divergent fan, and a flat detector. ``sod`` is the
-   source-to-object distance, ``sdd`` source-to-detector.
+   .. grid-item::
+
+      .. figure:: _static/schem_cone.svg
+
+         A point source, a divergent fan, and a flat detector. ``sod`` is the
+         source-to-object distance, ``sdd`` source-to-detector.
+
+   .. grid-item::
+
+      .. figure:: _static/schem_cone_3d.svg
+
+         In 3-D the fan becomes a cone. Magnification is ``sdd / sod``, so the
+         detector must be wider than the volume.
 
 .. code-block:: python
 
@@ -49,10 +97,22 @@ through the volume at :math:`\theta` and at :math:`\theta + \pi`.
 Arbitrary rays
 --------------
 
-.. figure:: _static/schem_explicit.svg
-   :width: 46%
+.. grid:: 1 2 2 2
+   :gutter: 3
 
-   Nothing has to be regular. Each ray carries its own point and direction.
+   .. grid-item::
+
+      .. figure:: _static/schem_explicit.svg
+
+         Nothing has to be regular. Each ray carries its own point and
+         direction.
+
+   .. grid-item::
+
+      .. figure:: _static/schem_explicit_3d.svg
+
+         The same in 3-D. Rays need share neither an origin, a direction, nor a
+         detector.
 
 .. code-block:: python
 

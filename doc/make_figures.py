@@ -65,6 +65,178 @@ def _rotation(ax, r, a0, a1, label_at, color="#57606a"):
             ha="center", va="center")
 
 
+def _cube(ax, B, color="#8b949e", lw=0.9):
+    """Wireframe of the reconstruction lattice."""
+    c = np.array([-B, B])
+    for i in (0, 1):
+        for j in (0, 1):
+            ax.plot(c, [c[i]] * 2, [c[j]] * 2, color=color, lw=lw, zorder=1)
+            ax.plot([c[i]] * 2, c, [c[j]] * 2, color=color, lw=lw, zorder=1)
+            ax.plot([c[i]] * 2, [c[j]] * 2, c, color=color, lw=lw, zorder=1)
+
+
+def _ray3(ax, p0, p1, color, lw=1.1, dot=8, head=0.26):
+    """3-D ray: dot at the start, arrowhead of fixed size ending exactly at p1."""
+    p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+    d = p1 - p0
+    n = np.linalg.norm(d)
+    d = d / max(n, 1e-12)
+    q = p1 - min(head, 0.4 * n) * d
+    ax.plot(*zip(p0, q), color=color, lw=lw, zorder=3)
+    ax.quiver(*q, *(p1 - q), color=color, lw=lw, arrow_length_ratio=1.0,
+              zorder=3)
+    if dot:
+        ax.scatter(*p0, color=color, s=dot, depthshade=False, zorder=4)
+
+
+def _plane(ax, centre, u, v, hu, hv, color, alpha=0.20):
+    """Filled detector rectangle spanned by u, v."""
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    c, u, v = (np.asarray(x, float) for x in (centre, u, v))
+    corners = [c - hu * u - hv * v, c + hu * u - hv * v,
+               c + hu * u + hv * v, c - hu * u + hv * v]
+    ax.add_collection3d(Poly3DCollection([corners], facecolor=color, alpha=alpha,
+                                        edgecolor=color, lw=1.2))
+
+
+def _tidy3(ax, lim, elev=20, azim=-58):
+    ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim); ax.set_zlim(-lim, lim)
+    ax.set_box_aspect((1, 1, 1))
+    ax.view_init(elev=elev, azim=azim)
+    ax.set_axis_off()
+
+
+def detector_spec_figure():
+    """What size and num_cell mean, in 1-D and 2-D detectors."""
+    GREY, INK = "#57606a", "#24292f"
+    fig = plt.figure(figsize=(10.4, 3.6))
+    gs = fig.add_gridspec(1, 2, width_ratios=(1.0, 1.25), wspace=0.05)
+
+    # ---- 1-D detector (2-D scan) ----
+    ax = fig.add_subplot(gs[0])
+    W, N = 12.0, 6
+    cell = W / N
+    c = (np.arange(N) - (N - 1) / 2) * cell
+    ax.add_patch(plt.Rectangle((-W / 2, -0.4), W, 0.8, facecolor="#dbeafe",
+                               edgecolor="#1f6feb", lw=1.4))
+    for e in np.linspace(-W / 2, W / 2, N + 1):
+        ax.plot([e, e], [-0.4, 0.4], color="#1f6feb", lw=1.0)
+    ax.plot(c, np.zeros_like(c), "o", color="#1f6feb", ms=5)
+    ax.annotate("", xy=(W / 2, 1.15), xytext=(-W / 2, 1.15),
+                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
+    ax.text(0, 1.35, "size[0]", ha="center", fontsize=9, color=GREY)
+    ax.annotate("", xy=(c[3] + cell / 2, -0.95), xytext=(c[3] - cell / 2, -0.95),
+                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
+    ax.text(c[3], -1.5, "cell_size = size[0] / num_cell[0]", ha="center",
+            fontsize=8.5, color=GREY)
+    ax.annotate("", xy=(W / 2 + 1.9, 0), xytext=(W / 2 + 0.5, 0),
+                arrowprops=dict(arrowstyle="-|>", color=INK, lw=1.3))
+    ax.text(W / 2 + 1.2, 0.35, "u1", ha="center", fontsize=10, color=INK)
+    ax.plot(0, 0, "+", color=INK, ms=11, mew=1.6)
+    ax.text(0, 0.62, "beam axis", ha="center", fontsize=8.5, color=INK)
+    ax.set_title("2-D scan: 1-D detector\nDetectorSpec(size=(12.,), num_cell=(6,))",
+                 fontsize=9.5)
+    ax.set_xlim(-W / 2 - 1.2, W / 2 + 2.6); ax.set_ylim(-5.6, 5.6)
+    ax.set_aspect("equal"); ax.axis("off")
+
+    # ---- 2-D detector (3-D scan) ----
+    ax = fig.add_subplot(gs[1])
+    W, H, NU, NV = 12.0, 8.0, 6, 4
+    cu, cv = W / NU, H / NV
+    ax.add_patch(plt.Rectangle((-W / 2, -H / 2), W, H, facecolor="#ede9fe",
+                               edgecolor="#8250df", lw=1.4))
+    for e in np.linspace(-W / 2, W / 2, NU + 1):
+        ax.plot([e, e], [-H / 2, H / 2], color="#8250df", lw=0.9)
+    for e in np.linspace(-H / 2, H / 2, NV + 1):
+        ax.plot([-W / 2, W / 2], [e, e], color="#8250df", lw=0.9)
+    gu = (np.arange(NU) - (NU - 1) / 2) * cu
+    gv = (np.arange(NV) - (NV - 1) / 2) * cv
+    U, V = np.meshgrid(gu, gv, indexing="ij")
+    ax.plot(U.ravel(), V.ravel(), "o", color="#8250df", ms=3.4)
+    for i1 in range(2):
+        for i2 in range(NV):
+            ax.text(gu[i1], gv[i2] + 0.55, str(i1 * NV + i2), ha="center",
+                    fontsize=7.5, color=GREY)
+    ax.text(gu[-1], gv[-1] + 0.55, str(NU * NV - 1), ha="center", fontsize=7.5,
+            color=GREY)
+    ax.annotate("", xy=(W / 2, H / 2 + 0.95), xytext=(-W / 2, H / 2 + 0.95),
+                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
+    ax.text(0, H / 2 + 1.2, "size[0], num_cell[0] cells", ha="center", fontsize=9,
+            color=GREY)
+    ax.annotate("", xy=(-W / 2 - 0.95, H / 2), xytext=(-W / 2 - 0.95, -H / 2),
+                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
+    ax.text(-W / 2 - 1.75, 0, "size[1], num_cell[1] cells", rotation=90,
+            va="center", ha="center", fontsize=9, color=GREY)
+    ax.annotate("", xy=(W / 2 + 2.2, -H / 2), xytext=(W / 2 + 0.7, -H / 2),
+                arrowprops=dict(arrowstyle="-|>", color=INK, lw=1.3))
+    ax.text(W / 2 + 1.45, -H / 2 - 0.75, "u1", ha="center", fontsize=10, color=INK)
+    ax.annotate("", xy=(W / 2 + 0.7, -H / 2 + 1.5), xytext=(W / 2 + 0.7, -H / 2),
+                arrowprops=dict(arrowstyle="-|>", color=INK, lw=1.3))
+    ax.text(W / 2 + 1.35, -H / 2 + 1.2, "u2", fontsize=10, color=INK)
+    ax.text(W / 2 + 0.6, H / 2 - 0.2, "u2 lies along the\nrotation axis;\nu2 is the fast\naxis of the\nprojection",
+            fontsize=8.5, color=INK, va="top")
+    ax.set_title("3-D scan: 2-D detector\n"
+                 "DetectorSpec(size=(12., 8.), num_cell=(6, 4))", fontsize=9.5)
+    ax.set_xlim(-W / 2 - 3.6, W / 2 + 6.0); ax.set_ylim(-H / 2 - 1.9, H / 2 + 2.0)
+    ax.set_aspect("equal"); ax.axis("off")
+
+    save(fig, "schem_detector.svg")
+
+
+def geometry_schematics_3d():
+    """3-D counterparts of the three geometry drawings."""
+    B = 1.0
+    BLUE, PURPLE = "#1f6feb", "#8250df"
+
+    # ---- parallel ----
+    fig = plt.figure(figsize=(3.9, 3.9))
+    ax = fig.add_subplot(projection="3d")
+    _cube(ax, B)
+    L = 2.6 * B
+    for y in (-0.62, 0.0, 0.62):
+        for z in (-0.62, 0.0, 0.62):
+            _ray3(ax, (-0.5 * L, y, z), (0.5 * L, y, z), BLUE, lw=1.0, dot=7)
+    _plane(ax, (0.5 * L, 0, 0), (0, 1, 0), (0, 0, 1), 1.0, 1.0, BLUE)
+    ax.text(0.5 * L, -1.35, -1.25, "detector", color=BLUE, fontsize=9)
+    ax.plot([0, 0], [0, 0], [-1.75 * B, 1.75 * B], color="#57606a", lw=1.0,
+            ls=(0, (4, 3)))
+    ax.text(0.05, 0.05, 1.85 * B, "rotation axis", color="#57606a", fontsize=8.5)
+    _tidy3(ax, 1.55)
+    save(fig, "schem_parallel_3d.svg")
+
+    # ---- cone ----
+    fig = plt.figure(figsize=(3.9, 3.9))
+    ax = fig.add_subplot(projection="3d")
+    _cube(ax, B)
+    src = np.array([-2.4 * B, 0.0, 0.0])
+    xd = 2.4 * B
+    for y in (-0.8, 0.0, 0.8):
+        for z in (-0.8, 0.0, 0.8):
+            d = np.array([xd, y, z]) - src
+            _ray3(ax, src, src + d, PURPLE, lw=0.9, dot=0)
+    ax.scatter(*src, color=PURPLE, s=42, depthshade=False, zorder=5)
+    ax.text(src[0], 0.12, 0.34, "source", color=PURPLE, fontsize=9)
+    _plane(ax, (xd, 0, 0), (0, 1, 0), (0, 0, 1), 1.0, 1.0, PURPLE)
+    ax.text(xd, -1.35, -1.30, "detector", color=PURPLE, fontsize=9)
+    _tidy3(ax, 1.85)
+    save(fig, "schem_cone_3d.svg")
+
+    # ---- arbitrary ----
+    fig = plt.figure(figsize=(3.9, 3.9))
+    ax = fig.add_subplot(projection="3d")
+    _cube(ax, B)
+    spec = [((-1.7, -0.7, 0.6), (1, 0.55, -0.35), "#1f6feb"),
+            ((0.5, -1.8, -0.5), (-0.3, 1, 0.5), "#d1242f"),
+            ((-1.5, 0.9, -1.2), (1, -0.45, 0.9), "#2da44e"),
+            ((1.6, 0.4, -1.5), (-0.9, -0.3, 1), "#8250df"),
+            ((-0.4, 1.7, 1.3), (0.35, -1, -0.75), "#bf8700")]
+    for p0, d, col in spec:
+        d = np.asarray(d, float); d /= np.linalg.norm(d)
+        _ray3(ax, p0, np.asarray(p0) + 3.3 * B * d, col, lw=1.4, dot=13)
+    _tidy3(ax, 1.75)
+    save(fig, "schem_explicit_3d.svg")
+
+
 def geometry_schematics():
     """One drawing per geometry, from the rays the library builds. Vector output."""
     B = 1.0
@@ -367,7 +539,9 @@ def gallery_walnut():
 
 
 if __name__ == "__main__":
+    detector_spec_figure()
     geometry_schematics()
+    geometry_schematics_3d()
     bases()
     forward_adjoint()
     gallery_cone()
