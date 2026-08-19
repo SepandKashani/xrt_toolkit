@@ -16,43 +16,39 @@ A whole *Vibrio cholerae* cell, CZ CryoET Data Portal dataset 10489
 .. figure:: _static/real_cryoet_vibrio.png
    :width: 76%
 
-   The cell envelope, both polyphosphate granules and the appendage. No
-   filtering: 25 CGLS iterations, 5 seconds.
+   The cell envelope, both polyphosphate granules and the appendage, with
+   ribosome-scale texture in the cytoplasm. One second.
 
-A single-axis tilt series is a parallel-beam scan, so
-:py:func:`~xrt_toolkit.parallel_beam` builds it.
-:py:func:`~xrt_toolkit.parallel_beam` rotates about the third lattice axis and
-its first detector axis spans the second, so put the tilt axis on axis 3 and
-the thin specimen direction on axis 1.
+A single-axis tilt series is a parallel-beam scan, so the whole reconstruction
+is two calls: :py:func:`~xrt_toolkit.parallel_beam` for the geometry and
+:py:func:`~xrt_toolkit.fbp` to filter and backproject.
 
 .. code-block:: python
 
+   import numpy as np, drjit as dr
+   from drjit.cuda.ad import Float
+   import xrt_toolkit as xtk
+
+   # g: (n_tilt, NV, NU) tilt images, NV along the tilt axis
+   px = 2.666                                   # nm per binned voxel
+
+   # parallel_beam rotates about the third lattice axis, and its first detector
+   # axis spans the second. Put the tilt axis on axis 3, and the thin specimen
+   # direction on axis 1, where the beam points at zero tilt.
    knot = xtk.UniformSpec.centered(step=px, num=(NZ, NU, NV))
    det = xtk.DetectorSpec(size=(NU * px, NV * px), num_cell=(NU, NV))
    rays = xtk.parallel_beam(Float(np.deg2rad(tilt_angles)), det)
-   re = xtk.struct_rays(rays)
 
-   y = Float(np.transpose(g, (0, 2, 1)).ravel())        # (tilt, u1, u2)
-   A, At = (lambda f: xtk.xrt_apply(re, knot, 0, f),
-            lambda d: xtk.xrt_adjoint(re, knot, 0, d))
-
-   x, r = dr.zeros(Float, n_vox), Float(y)              # CGLS
-   s = At(r); p = Float(s); gam = dr.sum(s * s)
-   for _ in range(25):
-       q = A(p)
-       al = gam / dr.sum(q * q)
-       x = dr.fma(al, p, x); r = dr.fma(-al, q, r)
-       s = At(r); gnew = dr.sum(s * s)
-       p = dr.fma(gnew / gam, p, s); gam = gnew
+   y = Float(np.transpose(g, (0, 2, 1)).ravel())      # (tilt, u1, u2)
+   vol = xtk.fbp(rays, knot, y, window="shepp-logan")
 
 .. note::
 
-   Use CGLS, not CG on :math:`\mathbf{A}^{\top}\mathbf{A}`. CGLS keeps its
-   residual in data space and survives single precision here; CG on the normal
-   equations breaks down within a few iterations on this problem. Stop CGLS at
-   about 25 iterations. Past that the fp32 recursion degrades too, and early
-   stopping is in any case the usual regulariser for a tilt series that covers
-   only 120 degrees.
+   ``fbp`` beats an iterative solve here. Twenty-five CGLS iterations recover
+   the same features but leave a low-frequency gradient across the field, and
+   they cost five seconds against one. CG on the normal equations does worse
+   still: it breaks down in single precision on this problem within a few
+   iterations, so use CGLS if you do want to iterate.
 
 Cone-beam CT
 ~~~~~~~~~~~~
