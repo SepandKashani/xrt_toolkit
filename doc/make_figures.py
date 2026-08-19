@@ -106,78 +106,131 @@ def _tidy3(ax, lim, elev=20, azim=-58):
     ax.set_axis_off()
 
 
+GREEN, BLUE, ORANGE, GREY, INK = "#1a7f37", "#1f6feb", "#bc4c00", "#57606a", "#24292f"
+
+
+def _span(ax, p0, p1, label, color, off, fs=9.5, rot=0):
+    """Double-headed dimension arrow with its label."""
+    ax.annotate("", xy=tuple(p1), xytext=tuple(p0),
+                arrowprops=dict(arrowstyle="<->", color=color, lw=1.0))
+    mid = 0.5 * (np.asarray(p0, float) + np.asarray(p1, float)) + np.asarray(off, float)
+    ax.text(*mid, label, color=color, fontsize=fs, ha="center", va="center",
+            rotation=rot)
+
+
+def _axis_arrow(ax, p0, p1, label, color, off, fs=10):
+    ax.annotate("", xy=tuple(p1), xytext=tuple(p0),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=1.4,
+                                mutation_scale=11))
+    ax.text(*(np.asarray(p1, float) + np.asarray(off, float)), label, color=color,
+            fontsize=fs, ha="center", va="center")
+
+
+def lattice_figure():
+    """What start, step and num mean, and which lattice axis each detector axis spans."""
+    n2, n3, h = 5, 4, 1.0
+    fig = plt.figure(figsize=(5.4, 3.6))
+    ax = fig.add_subplot()
+
+    W, H = n2 * h, n3 * h
+    ax.add_patch(plt.Rectangle((0, 0), W, H, facecolor="#e6f4ea", edgecolor=GREEN,
+                               lw=1.4))
+    for k in range(1, n2):
+        ax.plot([k * h, k * h], [0, H], color=GREEN, lw=0.7, alpha=0.55)
+    for k in range(1, n3):
+        ax.plot([0, W], [k * h, k * h], color=GREEN, lw=0.7, alpha=0.55)
+    c2 = (np.arange(n2) + 0.5) * h
+    c3 = (np.arange(n3) + 0.5) * h
+    G2, G3 = np.meshgrid(c2, c3)
+    ax.plot(G2.ravel(), G3.ravel(), "o", color=GREEN, ms=3.0, alpha=0.55)
+
+    # start: centre of voxel (0, 0, 0)
+    ax.plot(c2[0], c3[0], "o", color=GREEN, ms=7)
+    ax.annotate("start", xy=(c2[0], c3[0]), xytext=(c2[0] - 1.5, c3[0] - 1.0),
+                color=GREEN, fontsize=10,
+                arrowprops=dict(arrowstyle="-", color=GREEN, lw=1.0))
+    # step: centre-to-centre pitch
+    _span(ax, (c2[1], c3[2]), (c2[2], c3[2]), "step", GREEN, (0, 0.36))
+
+    _span(ax, (0, H + 0.55), (W, H + 0.55), "num[1] cells", BLUE, (0, 0.42))
+    _span(ax, (-0.55, 0), (-0.55, H), "num[2] cells", ORANGE, (-0.42, 0), rot=90)
+
+    _axis_arrow(ax, (0, -0.75), (0.9 * W, -0.75), "axis 2  (u1)", BLUE, (0, -0.45))
+    _axis_arrow(ax, (W + 0.75, 0), (W + 0.75, 0.9 * H), "axis 3  (u2)", ORANGE,
+                (1.05, 0.28))
+    ax.plot(c2[0] - 0.001, H + 1.6, "o", mfc="white", mec=GREY, ms=11, mew=1.2)
+    ax.plot(c2[0], H + 1.6, ".", color=GREY, ms=4)
+    ax.text(c2[0] + 0.42, H + 1.6, "axis 1  (num[0]), out of the page", color=GREY,
+            fontsize=9, va="center")
+
+    ax.set_xlim(-2.4, W + 3.4); ax.set_ylim(-2.0, H + 2.4)
+    ax.set_aspect("equal"); ax.axis("off")
+    save(fig, "schem_lattice.svg")
+
+
 def detector_spec_figure():
     """What size and num_cell mean, in 1-D and 2-D detectors."""
-    GREY, INK = "#57606a", "#24292f"
-    fig = plt.figure(figsize=(10.4, 3.6))
-    gs = fig.add_gridspec(1, 2, width_ratios=(1.0, 1.25), wspace=0.05)
+    fig = plt.figure(figsize=(10.4, 3.4))
+    gs = fig.add_gridspec(1, 2, width_ratios=(1.0, 1.0), wspace=0.04)
+    aspect = 0.63          # same box height for both panels
 
     # ---- 1-D detector (2-D scan) ----
     ax = fig.add_subplot(gs[0])
-    W, N = 12.0, 6
-    cell = W / N
-    c = (np.arange(N) - (N - 1) / 2) * cell
-    ax.add_patch(plt.Rectangle((-W / 2, -0.4), W, 0.8, facecolor="#dbeafe",
-                               edgecolor="#1f6feb", lw=1.4))
-    for e in np.linspace(-W / 2, W / 2, N + 1):
-        ax.plot([e, e], [-0.4, 0.4], color="#1f6feb", lw=1.0)
-    ax.plot(c, np.zeros_like(c), "o", color="#1f6feb", ms=5)
-    ax.annotate("", xy=(W / 2, 1.15), xytext=(-W / 2, 1.15),
-                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
-    ax.text(0, 1.35, "size[0]", ha="center", fontsize=9, color=GREY)
-    ax.annotate("", xy=(c[3] + cell / 2, -0.95), xytext=(c[3] - cell / 2, -0.95),
-                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
-    ax.text(c[3], -1.5, "cell_size = size[0] / num_cell[0]", ha="center",
-            fontsize=8.5, color=GREY)
-    ax.annotate("", xy=(W / 2 + 1.9, 0), xytext=(W / 2 + 0.5, 0),
-                arrowprops=dict(arrowstyle="-|>", color=INK, lw=1.3))
-    ax.text(W / 2 + 1.2, 0.35, "u1", ha="center", fontsize=10, color=INK)
-    ax.plot(0, 0, "+", color=INK, ms=11, mew=1.6)
-    ax.text(0, 0.62, "beam axis", ha="center", fontsize=8.5, color=INK)
-    ax.set_title("2-D scan: 1-D detector\nDetectorSpec(size=(12.,), num_cell=(6,))",
-                 fontsize=9.5)
-    ax.set_xlim(-W / 2 - 1.2, W / 2 + 2.6); ax.set_ylim(-5.6, 5.6)
+    W, NU = 12.0, 6
+    cu = W / NU
+    c = (np.arange(NU) - (NU - 1) / 2) * cu
+    ax.add_patch(plt.Rectangle((-W / 2, -0.5), W, 1.0, facecolor="#f6f8fa",
+                               edgecolor=GREY, lw=1.3))
+    for e in np.linspace(-W / 2, W / 2, NU + 1)[1:-1]:
+        ax.plot([e, e], [-0.5, 0.5], color=GREY, lw=0.8)
+    ax.plot(c, np.zeros_like(c), "o", color=INK, ms=4)
+
+    _span(ax, (-W / 2, 1.95), (W / 2, 1.95), "size[0]", BLUE, (0, 0.55))
+    _span(ax, (c[3] - cu / 2, -1.15), (c[3] + cu / 2, -1.15), "cell_size", BLUE,
+          (0, -0.55), fs=9)
+    _axis_arrow(ax, (W / 2 + 0.7, 0), (W / 2 + 2.1, 0), "u1", BLUE, (0.0, 0.55))
+    ax.plot(0, 0, "+", color=INK, ms=12, mew=1.6)
+    ax.text(0, 0.85, "beam axis", ha="center", fontsize=9, color=GREY)
+    ax.set_title("1-D detector  —  2-D scan", fontsize=10.5, color=INK)
+    x0, x1 = -W / 2 - 1.4, W / 2 + 3.0
+    ax.set_xlim(x0, x1); ax.set_ylim(-aspect * (x1 - x0) / 2, aspect * (x1 - x0) / 2)
     ax.set_aspect("equal"); ax.axis("off")
 
     # ---- 2-D detector (3-D scan) ----
     ax = fig.add_subplot(gs[1])
     W, H, NU, NV = 12.0, 8.0, 6, 4
     cu, cv = W / NU, H / NV
-    ax.add_patch(plt.Rectangle((-W / 2, -H / 2), W, H, facecolor="#ede9fe",
-                               edgecolor="#8250df", lw=1.4))
-    for e in np.linspace(-W / 2, W / 2, NU + 1):
-        ax.plot([e, e], [-H / 2, H / 2], color="#8250df", lw=0.9)
-    for e in np.linspace(-H / 2, H / 2, NV + 1):
-        ax.plot([-W / 2, W / 2], [e, e], color="#8250df", lw=0.9)
+    ax.add_patch(plt.Rectangle((-W / 2, -H / 2), W, H, facecolor="#f6f8fa",
+                               edgecolor=GREY, lw=1.3))
+    for e in np.linspace(-W / 2, W / 2, NU + 1)[1:-1]:
+        ax.plot([e, e], [-H / 2, H / 2], color=GREY, lw=0.8)
+    for e in np.linspace(-H / 2, H / 2, NV + 1)[1:-1]:
+        ax.plot([-W / 2, W / 2], [e, e], color=GREY, lw=0.8)
     gu = (np.arange(NU) - (NU - 1) / 2) * cu
     gv = (np.arange(NV) - (NV - 1) / 2) * cv
     U, V = np.meshgrid(gu, gv, indexing="ij")
-    ax.plot(U.ravel(), V.ravel(), "o", color="#8250df", ms=3.4)
-    for i1 in range(2):
-        for i2 in range(NV):
-            ax.text(gu[i1], gv[i2] + 0.55, str(i1 * NV + i2), ha="center",
-                    fontsize=7.5, color=GREY)
-    ax.text(gu[-1], gv[-1] + 0.55, str(NU * NV - 1), ha="center", fontsize=7.5,
+    ax.plot(U.ravel(), V.ravel(), "o", color=INK, ms=3.0)
+    for i2 in range(NV):                       # u2 is the fast axis
+        ax.text(gu[0], gv[i2] + 0.52, str(i2), ha="center", fontsize=8, color=GREY)
+        ax.text(gu[1], gv[i2] + 0.52, str(NV + i2), ha="center", fontsize=8,
+                color=GREY)
+    ax.text(gu[-1], gv[-1] + 0.52, str(NU * NV - 1), ha="center", fontsize=8,
             color=GREY)
-    ax.annotate("", xy=(W / 2, H / 2 + 0.95), xytext=(-W / 2, H / 2 + 0.95),
-                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
-    ax.text(0, H / 2 + 1.2, "size[0], num_cell[0] cells", ha="center", fontsize=9,
-            color=GREY)
-    ax.annotate("", xy=(-W / 2 - 0.95, H / 2), xytext=(-W / 2 - 0.95, -H / 2),
-                arrowprops=dict(arrowstyle="<->", color=GREY, lw=1.0))
-    ax.text(-W / 2 - 1.75, 0, "size[1], num_cell[1] cells", rotation=90,
-            va="center", ha="center", fontsize=9, color=GREY)
-    ax.annotate("", xy=(W / 2 + 2.2, -H / 2), xytext=(W / 2 + 0.7, -H / 2),
-                arrowprops=dict(arrowstyle="-|>", color=INK, lw=1.3))
-    ax.text(W / 2 + 1.45, -H / 2 - 0.75, "u1", ha="center", fontsize=10, color=INK)
-    ax.annotate("", xy=(W / 2 + 0.7, -H / 2 + 1.5), xytext=(W / 2 + 0.7, -H / 2),
-                arrowprops=dict(arrowstyle="-|>", color=INK, lw=1.3))
-    ax.text(W / 2 + 1.35, -H / 2 + 1.2, "u2", fontsize=10, color=INK)
-    ax.text(W / 2 + 0.6, H / 2 - 0.2, "u2 lies along the\nrotation axis;\nu2 is the fast\naxis of the\nprojection",
-            fontsize=8.5, color=INK, va="top")
-    ax.set_title("3-D scan: 2-D detector\n"
-                 "DetectorSpec(size=(12., 8.), num_cell=(6, 4))", fontsize=9.5)
-    ax.set_xlim(-W / 2 - 3.6, W / 2 + 6.0); ax.set_ylim(-H / 2 - 1.9, H / 2 + 2.0)
+
+    _span(ax, (-W / 2, H / 2 + 1.0), (W / 2, H / 2 + 1.0),
+          "size[0], num_cell[0] cells", BLUE, (0, 0.55))
+    _span(ax, (-W / 2 - 1.0, -H / 2), (-W / 2 - 1.0, H / 2),
+          "size[1], num_cell[1] cells", ORANGE, (-0.55, 0), rot=90)
+    _axis_arrow(ax, (W / 2 + 0.8, -H / 2), (W / 2 + 2.3, -H / 2), "u1", BLUE,
+                (-0.75, -0.8))
+    _axis_arrow(ax, (W / 2 + 0.8, -H / 2 + 0.5), (W / 2 + 0.8, -H / 2 + 2.4), "u2",
+                ORANGE, (0.75, -0.1))
+    ax.plot([W / 2 + 3.5] * 2, [-H / 2, H / 2], color=ORANGE, lw=1.1, ls=(0, (4, 3)))
+    ax.text(W / 2 + 3.95, 0, "rotation axis", color=ORANGE, fontsize=9, rotation=90,
+            va="center", ha="center")
+    ax.set_title("2-D detector  —  3-D scan", fontsize=10.5, color=INK)
+    x0, x1 = -W / 2 - 3.0, W / 2 + 5.0
+    ax.set_xlim(x0, x1); ax.set_ylim(-aspect * (x1 - x0) / 2, aspect * (x1 - x0) / 2)
     ax.set_aspect("equal"); ax.axis("off")
 
     save(fig, "schem_detector.svg")
@@ -218,6 +271,9 @@ def geometry_schematics_3d():
     ax.text(src[0], 0.12, 0.34, "source", color=PURPLE, fontsize=9)
     _plane(ax, (xd, 0, 0), (0, 1, 0), (0, 0, 1), 1.0, 1.0, PURPLE)
     ax.text(xd, -1.35, -1.30, "detector", color=PURPLE, fontsize=9)
+    ax.plot([0, 0], [0, 0], [-1.75 * B, 1.75 * B], color="#57606a", lw=1.0,
+            ls=(0, (4, 3)))
+    ax.text(0.05, 0.05, 1.85 * B, "rotation axis", color="#57606a", fontsize=8.5)
     _tidy3(ax, 1.85)
     save(fig, "schem_cone_3d.svg")
 
@@ -539,6 +595,7 @@ def gallery_walnut():
 
 
 if __name__ == "__main__":
+    lattice_figure()
     detector_spec_figure()
     geometry_schematics()
     geometry_schematics_3d()

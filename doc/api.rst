@@ -58,11 +58,13 @@ Geometry
    y = xtk.xrt_apply(re, knot, order, f)
 
 .. autoclass:: xrt_toolkit.UniformSpec
+   :members: centered
 
 .. code-block:: python
 
    # centred on the rotation axis, unit voxels
    knot = xtk.UniformSpec(start=(-N/2 + 0.5,) * 3, step=1, num=(N, N, N))
+   knot = xtk.UniformSpec.centered(step=1, num=(N, N, N))      # the same lattice
 
 .. autoclass:: xrt_toolkit.DetectorSpec
 

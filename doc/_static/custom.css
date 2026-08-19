@@ -1,0 +1,24 @@
+/* Colour key for the geometry conventions: the same colours mark the same
+   quantity in the figures and in the code below them. */
+.xtk-vol,
+.xtk-u1,
+.xtk-u2,
+.xtk-ax1 {
+  font-weight: 600;
+}
+.xtk-vol { color: #1a7f37; }
+.xtk-u1  { color: #1f6feb; }
+.xtk-u2  { color: #bc4c00; }
+.xtk-ax1 { color: #57606a; }
+
+body[data-theme="dark"] .xtk-vol { color: #3fb950; }
+body[data-theme="dark"] .xtk-u1  { color: #58a6ff; }
+body[data-theme="dark"] .xtk-u2  { color: #ff9f4a; }
+body[data-theme="dark"] .xtk-ax1 { color: #a3acb6; }
+
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) .xtk-vol { color: #3fb950; }
+  body:not([data-theme="light"]) .xtk-u1  { color: #58a6ff; }
+  body:not([data-theme="light"]) .xtk-u2  { color: #ff9f4a; }
+  body:not([data-theme="light"]) .xtk-ax1 { color: #a3acb6; }
+}

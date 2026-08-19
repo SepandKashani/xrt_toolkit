@@ -5,31 +5,70 @@ A geometry is a set of rays: a point and a direction for each one. You can
 build the standard scans with a helper, or pass rays yourself. Both feed the
 same kernels.
 
-Detector conventions
---------------------
+.. role:: xtkvol
+   :class: xtk-vol
+.. role:: xtku1
+   :class: xtk-u1
+.. role:: xtku2
+   :class: xtk-u2
+.. role:: xtkax1
+   :class: xtk-ax1
 
-Every helper takes a :py:class:`~xrt_toolkit.DetectorSpec`. It holds a physical
-``size`` and a cell count ``num_cell``, one entry per detector axis: one axis
-for a 2-D scan, two for a 3-D scan.
+Conventions
+-----------
+
+Two objects fix every convention. :py:class:`~xrt_toolkit.UniformSpec` describes
+the voxel lattice, :py:class:`~xrt_toolkit.DetectorSpec` the detector. The
+colours below carry through to the code: :xtkvol:`green` for the lattice,
+:xtku1:`blue` for the ``u1`` detector axis, :xtku2:`orange` for ``u2``, and
+:xtkax1:`grey` for the remaining lattice axis and the beam.
+
+.. figure:: _static/schem_lattice.svg
+   :width: 62%
+
+   ``start`` is the centre of the first voxel and ``step`` the pitch between
+   centres, so the lattice carries no separate origin. Each detector axis spans
+   one lattice axis: ``u1`` spans axis 2, ``u2`` spans axis 3.
 
 .. figure:: _static/schem_detector.svg
-   :width: 92%
+   :width: 100%
 
-   ``size`` is the full width of the detector, not the cell pitch. The pitch
-   follows as ``size[k] / num_cell[k]``.
+   ``size`` is the full width of the detector, not the pitch. The pitch follows
+   as ``size[k] / num_cell[k]``. In 3-D, ``u2`` runs along the rotation axis, so
+   ``size[1]`` sets the axial coverage.
+
+Both figures in code, with the same numbers:
+
+.. parsed-literal::
+
+   knot = xtk.UniformSpec(start=\ :xtkvol:`(-1.0, -2.0, -1.5)`, step=\ :xtkvol:`1.0`,
+                          num=(:xtkax1:`3`, :xtku1:`5`, :xtku2:`4`))
+
+   det = xtk.DetectorSpec(size=(:xtku1:`12.0`, :xtku2:`8.0`),
+                          num_cell=(:xtku1:`6`, :xtku2:`4`))
+
+   rays = xtk.parallel_beam(angles, det)        # sinogram (len(angles), :xtku1:`6`, :xtku2:`4`)
+
+:py:meth:`~xrt_toolkit.UniformSpec.centered` gives that same ``start`` from the
+step and the counts alone. Drop the last entry of each tuple for a 2-D problem:
+the beam then travels along axis 1 at :math:`\theta = 0`, and ``u1`` still spans
+axis 2.
+
+.. parsed-literal::
+
+   knot = xtk.UniformSpec.centered(step=\ :xtkvol:`1.0`, num=(:xtkax1:`3`, :xtku1:`5`))
+   det = xtk.DetectorSpec(size=(:xtku1:`12.0`,), num_cell=(:xtku1:`6`,))
 
 Three rules cover the rest.
 
 * Cells are centred, so cell ``i`` sits at :math:`(i - (N-1)/2) \times`
   ``cell_size``. The beam axis passes through the middle of the detector, which
   falls between two cells when ``num_cell`` is even.
-* ``u1`` spans lattice axis 2, ``u2`` spans lattice axis 3. In 3-D that makes
-  ``u2`` the rotation axis, so ``size[1]`` sets the axial coverage.
-* The projection is laid out ``(angles, u1, u2)``, with ``u2`` fastest. Reshape
-  a sinogram to that order and nothing else needs to change.
-
-Units are yours. Pass millimetres and the volume must be in millimetres too.
-Voxel units are the safer default in single precision; see :doc:`pitfalls`.
+* The projection is laid out ``(angles, u1, u2)``, with ``u2`` fastest. That is
+  the numbering in the right-hand panel above. Reshape a sinogram to that order
+  and nothing else needs to change.
+* Units are yours. Pass millimetres and the volume must be in millimetres too.
+  Voxel units are the safer default in single precision; see :doc:`pitfalls`.
 
 Parallel beam
 -------------
