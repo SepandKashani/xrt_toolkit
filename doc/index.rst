@@ -1,13 +1,58 @@
 XRT Toolkit
 ===========
 
-GPU X-ray transforms and reconstruction, built on `Dr.Jit
-<https://drjit.readthedocs.io>`_.
+.. rst-class:: xtk-lead
 
-The library projects a volume along any set of rays and applies the exact
-transpose of that projection. Both work in 2-D and 3-D, on box-spline bases.
-Both are differentiable with respect to the rays themselves, so you can fit
-the scan geometry as well as the image.
+   GPU X-ray transforms and reconstruction, built on `Dr.Jit
+   <https://drjit.readthedocs.io>`_. Project a volume along any set of rays,
+   apply the exact transpose, and differentiate with respect to the rays
+   themselves.
+
+.. grid:: 1 1 2 2
+   :gutter: 3
+   :class-container: xtk-hero
+
+   .. grid-item::
+      :columns: 12 12 8 8
+
+      .. code-block:: python
+
+         import xrt_toolkit as xtk
+
+         knot = xtk.UniformSpec.centered(step=1.0, num=(512, 512))
+         det = xtk.DetectorSpec(size=(768.0,), num_cell=(768,))
+         rays = xtk.parallel_beam(angles, det)
+
+         sino = xtk.xrt_struct_apply(rays, knot, 1, volume)
+         rec = xtk.fbp(rays, knot, sino, window="hann")
+
+   .. grid-item::
+      :columns: 12 12 4 4
+
+      .. button-ref:: gallery
+         :ref-type: doc
+         :color: primary
+         :expand:
+
+         Real-data gallery
+
+      .. button-ref:: geometry
+         :ref-type: doc
+         :color: primary
+         :outline:
+         :expand:
+
+         Conventions
+
+      .. button-link:: https://github.com/SepandKashani/xrt_toolkit
+         :color: primary
+         :outline:
+         :expand:
+
+         Source
+
+Both directions work in 2-D and 3-D, on box-spline bases, so you can fit the
+scan geometry as well as the image.
 
 .. figure:: _static/forward_adjoint.png
 

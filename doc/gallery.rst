@@ -14,7 +14,7 @@ A whole *Vibrio cholerae* cell, CZ CryoET Data Portal dataset 10489
 [czi10489]_. 41 tilts from -53 to +67 degrees, 1023 x 1440, 13.3 A per pixel.
 
 .. figure:: _static/real_cryoet_vibrio.png
-   :width: 92%
+   :width: 64%
 
    The cell envelope, both polyphosphate granules and the appendage, with
    ribosome-scale texture in the cytoplasm. One second.

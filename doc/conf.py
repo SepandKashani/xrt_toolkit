@@ -54,7 +54,24 @@ html_theme_options = {
     "source_repository": "https://github.com/SepandKashani/xrt_toolkit/",
     "source_branch": "v2",
     "source_directory": "doc/",
+    "light_css_variables": {
+        "color-brand-primary": "#0e7490",
+        "color-brand-content": "#0e7490",
+        "color-brand-visited": "#155e75",
+        "font-stack": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', "
+                      "Helvetica, Arial, sans-serif",
+        "font-stack--monospace": "'JetBrains Mono', SFMono-Regular, Menlo, "
+                                 "Consolas, Monaco, 'Liberation Mono', monospace",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#22d3ee",
+        "color-brand-content": "#38bdf8",
+        "color-brand-visited": "#67e8f9",
+    },
 }
+
+pygments_style = "tango"
+pygments_dark_style = "github-dark"
 copybutton_exclude = ".linenos, .gp, .go"      # skip prompts and output lines
 
 # The library docstrings use LaTeX macros; define the ones they rely on.
