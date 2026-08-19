@@ -31,10 +31,16 @@ XRT Toolkit
              dr.linspace(Float, 0, np.pi, 512, endpoint=False), det)
 
          sino = xtk.xrt_struct_apply(rays, knot, 1, Float(img.ravel()))
-         rec = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
+         fbp = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
 
-         print(rec.shape, round(float(abs(rec - img).mean()), 4))
-         # (512, 512) 0.0023
+         re = xtk.struct_rays(rays)               # expand once, then iterate
+         cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 1, v),
+                                lambda v: xtk.xrt_adjoint(re, knot, 1, v),
+                                sino, N * N, n_iter=15)).reshape(N, N)
+
+         print(round(float(abs(fbp - img).mean()), 4),
+               round(float(abs(cg - img).mean()), 4))
+         # 0.0023 0.0044
 
    .. grid-item::
       :columns: 12 12 4 4
@@ -149,23 +155,36 @@ Matplotlib.
    angles = dr.linspace(Float, 0, np.pi, 180, endpoint=False)
    rays = xtk.parallel_beam(angles, det)
 
-   # Forward, then filtered backprojection.
+   # Forward projection.
    sino = xtk.xrt_struct_apply(rays, knot, 1, Float(image.ravel()))
-   rec = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
 
-   print(f"sinogram {len(sino)} samples, reconstruction {rec.shape}")
-   print(f"mean absolute error {np.abs(rec - image).mean():.4f}")
+   # Two ways back: filtered backprojection, and 15 iterations of CG.
+   fbp = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
+
+   re = xtk.struct_rays(rays)          # expand once; the solver calls A many times
+   cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 1, v),
+                          lambda v: xtk.xrt_adjoint(re, knot, 1, v),
+                          sino, N * N, n_iter=15)).reshape(N, N)
+
+   print(f"sinogram {len(sino)} samples, reconstruction {fbp.shape}")
+   print(f"mean absolute error   fbp {np.abs(fbp - image).mean():.4f}"
+         f"   cg {np.abs(cg - image).mean():.4f}")
 
    import matplotlib.pyplot as plt
-   fig, ax = plt.subplots(1, 3, figsize=(9, 3.2))
-   for a, im, t in zip(ax, (image, np.asarray(sino).reshape(180, 192), rec),
-                       ("phantom", "sinogram", "fbp")):
+   fig, ax = plt.subplots(1, 4, figsize=(12, 3.2))
+   for a, im, t in zip(ax, (image, np.asarray(sino).reshape(180, 192), fbp, cg),
+                       ("phantom", "sinogram", "fbp", "cg, 15 iterations")):
        a.imshow(im, cmap="gray"); a.set_title(t); a.set_axis_off()
    plt.show()
 
 It prints ``sinogram 34560 samples, reconstruction (128, 128)`` and a mean
-absolute error of ``0.0170``, then draws the phantom, its sinogram and the
-reconstruction side by side.
+absolute error near ``0.0170`` for both, then draws the phantom, its sinogram
+and the two reconstructions side by side.
+
+Fifteen iterations is roughly where CG catches up with ``fbp`` on data this
+clean; it keeps improving past that, reaching ``0.0116`` by 120. On noisy or
+incomplete data the picture reverses, and stopping early is what keeps CG
+usable. :doc:`pitfalls` covers when to reach for which.
 
 Read :doc:`transform` for what the operators compute. Or open the
 :doc:`tutorials`.
