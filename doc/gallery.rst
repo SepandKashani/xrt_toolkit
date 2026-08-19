@@ -85,6 +85,7 @@ one number, and the fused operator pushes all its spherical-harmonic channels
 through a single lattice traversal.
 
 .. figure:: _static/real_tensor_orientation.png
+   :width: 58%
 
    The fitted mineral orientation inside a bone strut. Each segment is the
    fibre axis of one voxel, coloured by how strongly that voxel scatters. The

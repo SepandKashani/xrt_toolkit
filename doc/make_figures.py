@@ -29,21 +29,106 @@ def save(fig, name):
     print("wrote", name)
 
 
-def geometries():
-    """The three ways to specify rays."""
-    det = xtk.DetectorSpec(size=(1.5 * N,), num_cell=(12,))
-    par = xtk.parallel_beam(dr.linspace(Float, 0, np.pi, 4, endpoint=False), det)
-    cone = xtk.cone_beam(sod=1.6 * N, sdd=2.8 * N,
-                         angles=dr.linspace(Float, 0, 2 * np.pi, 4, endpoint=False),
-                         detector_spec=xtk.DetectorSpec(size=(2.2 * N,), num_cell=(12,)))
-    t = Array2f([0.0, -20.0, 30.0], [0.0, 10.0, -50.0])
-    n = Array2f([1.0, 0.6, 0.0], [0.0, 0.8, 1.0])
-    for spec, name, title in ((par, "geom_parallel.png", "parallel_beam"),
-                              (cone, "geom_cone.png", "cone_beam"),
-                              ((t, n), "geom_explicit.png", "explicit (t, n)")):
-        fig = xtk.plot_rays(spec, knot)
-        fig.suptitle(title)
-        save(fig, name)
+def _lattice(ax, B, n=8):
+    ax.add_patch(plt.Rectangle((-B, -B), 2 * B, 2 * B, facecolor="#eceff3",
+                               edgecolor="#8b949e", lw=1.0, zorder=1))
+    for k in np.linspace(-B, B, n + 1)[1:-1]:
+        ax.plot([-B, B], [k, k], color="white", lw=0.6, zorder=1.5)
+        ax.plot([k, k], [-B, B], color="white", lw=0.6, zorder=1.5)
+
+
+def _chords(ax, t, n, R, color, lw=1.0, alpha=0.9):
+    """Draw each ray only where it crosses the disc of radius R."""
+    for (px, py), (dx, dy) in zip(t, n):
+        b = px * dx + py * dy
+        disc = b * b - (px * px + py * py - R * R)
+        if disc <= 0:
+            continue
+        r = np.sqrt(disc)
+        for s0, s1 in [(-b - r, -b + r)]:
+            ax.plot([px + s0 * dx, px + s1 * dx], [py + s0 * dy, py + s1 * dy],
+                    color=color, lw=lw, alpha=alpha, solid_capstyle="round", zorder=2)
+
+
+def geometry_schematics():
+    """One clear drawing per geometry, using the rays the library builds."""
+    B, R = 1.0, 1.7
+    ks = xtk.UniformSpec(start=(-B + B / 8,) * 2, step=2 * B / 8, num=(8, 8))
+    BLUE, PURPLE = "#1f6feb", "#8250df"
+
+    # ---------------- parallel ----------------
+    fig, ax = plt.subplots(figsize=(3.9, 3.9))
+    _lattice(ax, B)
+    det = xtk.DetectorSpec(size=(2.4 * B,), num_cell=(13,))
+    rays = xtk.struct_rays(xtk.parallel_beam(Float([0.0]), det))
+    t = np.asarray(rays[0]).T.reshape(-1, 2)
+    n = np.asarray(rays[1]).T.reshape(-1, 2)
+    _chords(ax, t, n, R, BLUE, lw=1.0)
+    ax.plot([R + 0.13, R + 0.13], [-1.2 * B, 1.2 * B], color=BLUE, lw=4.0,
+            solid_capstyle="butt", zorder=3)
+    ax.text(R + 0.30, 0, "detector", rotation=90, va="center", fontsize=9, color=BLUE)
+    ax.annotate("", xy=(0.62 * R, 0.86 * B), xytext=(0.30 * R, 0.86 * B),
+                arrowprops=dict(arrowstyle="-|>", color=BLUE, lw=1.5))
+    th = np.linspace(0.35 * np.pi, 0.95 * np.pi, 60)
+    ax.plot(1.45 * R * np.cos(th), 1.45 * R * np.sin(th), color="#57606a", lw=1.0,
+            ls=(0, (4, 3)))
+    ax.annotate("", xy=(1.45 * R * np.cos(th[-1]), 1.45 * R * np.sin(th[-1])),
+                xytext=(1.45 * R * np.cos(th[-6]), 1.45 * R * np.sin(th[-6])),
+                arrowprops=dict(arrowstyle="-|>", color="#57606a", lw=1.2))
+    ax.text(-1.05 * R, 1.62 * R, "rotates", fontsize=9, color="#57606a")
+    ax.set_xlim(-2.7, 2.7); ax.set_ylim(-2.35, 2.8)
+    ax.set_aspect("equal"); ax.axis("off")
+    save(fig, "schem_parallel.png")
+
+    # ---------------- cone ----------------
+    fig, ax = plt.subplots(figsize=(4.7, 3.5))
+    _lattice(ax, B)
+    sod, sdd = 2.5 * B, 4.5 * B
+    rays = xtk.struct_rays(xtk.cone_beam(
+        sod=sod, sdd=sdd, angles=Float([0.0]),
+        detector_spec=xtk.DetectorSpec(size=(2.9 * B,), num_cell=(13,))))
+    t = np.asarray(rays[0]).T.reshape(-1, 2)
+    n = np.asarray(rays[1]).T.reshape(-1, 2)
+    src = t[0]
+    xd = src[0] + sdd
+    ends = []
+    for (dx, dy) in n:
+        s = (xd - src[0]) / dx
+        ends.append(src[1] + s * dy)
+        ax.plot([src[0], xd], [src[1], src[1] + s * dy], color=PURPLE, lw=0.8,
+                alpha=0.9, zorder=2)
+    h = max(abs(min(ends)), abs(max(ends)))
+    ax.plot(*src, "o", color=PURPLE, ms=7, zorder=4)
+    ax.text(src[0] + 0.08, src[1] + 0.22, "source", fontsize=9, color=PURPLE)
+    ax.plot([xd, xd], [-h, h], color=PURPLE, lw=4.0, solid_capstyle="butt", zorder=3)
+    ax.text(xd + 0.16, 0, "detector", rotation=90, va="center", fontsize=9, color=PURPLE)
+    for y, ab, lab in ((-h - 0.30, (src[0], 0.0), "sod"),
+                       (-h - 0.72, (src[0], xd), "sdd")):
+        ax.annotate("", xy=(ab[1], y), xytext=(ab[0], y),
+                    arrowprops=dict(arrowstyle="<->", color="#57606a", lw=1.0))
+        ax.text(sum(ab) / 2, y - 0.24, lab, ha="center", fontsize=9, color="#57606a")
+    ax.set_xlim(src[0] - 0.45, xd + 0.75)
+    ax.set_ylim(-h - 1.15, h + 0.35)
+    ax.set_aspect("equal"); ax.axis("off")
+    save(fig, "schem_cone.png")
+
+    # ---------------- arbitrary ----------------
+    fig, ax = plt.subplots(figsize=(3.9, 3.9))
+    _lattice(ax, B)
+    t = np.array([[-0.85, 0.5], [0.15, -0.9], [-0.4, -0.6], [0.7, 0.25], [0.0, 0.05]])
+    ang = np.array([0.18, 1.30, 0.72, 2.40, 1.95])
+    n = np.stack([np.cos(ang), np.sin(ang)], 1)
+    for p0, d, col in zip(t, n, ["#1f6feb", "#d1242f", "#2da44e", "#8250df", "#bf8700"]):
+        _chords(ax, [p0], [d], R, col, lw=1.7, alpha=0.95)
+        ax.plot(*p0, "o", color=col, ms=5.5, zorder=4)
+        e = p0 + (np.sqrt(max(R * R - (p0[0] * d[1] - p0[1] * d[0]) ** 2, 0))
+                  - (p0 @ d)) * d
+        ax.annotate("", xy=e, xytext=e - 0.34 * d,
+                    arrowprops=dict(arrowstyle="-|>", color=col, lw=1.6))
+    ax.text(0, -2.05, "each ray: one point, one direction", ha="center", fontsize=9)
+    ax.set_xlim(-2.15, 2.15); ax.set_ylim(-2.35, 2.15)
+    ax.set_aspect("equal"); ax.axis("off")
+    save(fig, "schem_explicit.png")
 
 
 def bases():
@@ -275,7 +360,7 @@ def gallery_walnut():
 
 
 if __name__ == "__main__":
-    geometries()
+    geometry_schematics()
     bases()
     forward_adjoint()
     gallery_cone()

@@ -1,48 +1,81 @@
 Geometries
 ==========
 
-A geometry is a set of rays. The library takes them two ways. Both feed the
+A geometry is a set of rays: a point and a direction for each one. You can
+build the standard scans with a helper, or pass rays yourself. Both feed the
 same kernels.
 
-Explicit rays
+Parallel beam
 -------------
 
-Any pair of arrays is a geometry: a point :math:`\mathbf{t}` and a direction
-:math:`\mathbf{n}` for each ray. Nothing has to be regular. Listmode PET,
-sparse plasma diagnostics and a scanner you are still calibrating all fit.
+.. figure:: _static/schem_parallel.png
+   :width: 46%
 
-.. figure:: _static/geom_explicit.png
-   :width: 60%
+   One angle of a parallel scan. Every ray shares a direction; the whole
+   assembly rotates about the volume.
 
-   Three arbitrary rays, drawn by :py:func:`~xrt_toolkit.plot_rays`.
+.. code-block:: python
 
-Structured scans
-----------------
+   det = xtk.DetectorSpec(size=(1.5 * N,), num_cell=(192,))
+   rays = xtk.parallel_beam(dr.linspace(Float, 0, np.pi, 180, endpoint=False), det)
 
-:py:func:`~xrt_toolkit.parallel_beam` and :py:func:`~xrt_toolkit.cone_beam`
-build standard acquisitions from a list of angles and a
-:py:class:`~xrt_toolkit.DetectorSpec`. They store one matrix per projection
-rather than every ray, so memory stays flat as the scan grows.
+   y = xtk.xrt_struct_apply(rays, knot, order, f)
 
-.. list-table::
-   :widths: 50 50
+Angles cover :math:`[0, \pi)`. A ray at :math:`\theta + \pi` traces the same
+line, so a wider sweep only repeats work. Give ``DetectorSpec`` a second axis
+and the same call becomes a 3-D scan that rotates about the third lattice axis.
 
-   * - .. figure:: _static/geom_parallel.png
+Cone beam
+---------
 
-          ``parallel_beam``, angles over :math:`[0, \pi)`
-     - .. figure:: _static/geom_cone.png
+.. figure:: _static/schem_cone.png
+   :width: 62%
 
-          ``cone_beam``, a full circle, ``sod`` and ``sdd``
+   A point source, a divergent fan, and a flat detector. ``sod`` is the
+   source-to-object distance, ``sdd`` source-to-detector.
 
-Which one to use
-----------------
+.. code-block:: python
 
-The structured operators loop over projections and launch one kernel each.
-That is fine for a single pass. Inside a solver the launch overhead dominates.
+   det = xtk.DetectorSpec(size=(2.2 * N, 1.75 * N), num_cell=(216, 168))
+   rays = xtk.cone_beam(sod=1.6 * N, sdd=2.8 * N,
+                        angles=dr.linspace(Float, 0, 2 * np.pi, 360, endpoint=False),
+                        detector_spec=det)
+
+   rec = xtk.fbp_cone(rays, knot, y, sod=sod, sdd=sdd, window="hann")
+
+Angles cover :math:`[0, 2\pi)` here: a divergent beam takes a different path
+through the volume at :math:`\theta` and at :math:`\theta + \pi`.
+
+Arbitrary rays
+--------------
+
+.. figure:: _static/schem_explicit.png
+   :width: 46%
+
+   Nothing has to be regular. Each ray carries its own point and direction.
+
+.. code-block:: python
+
+   t = Array2f(t_x, t_y)          # (2, M) anchors, one column per ray
+   n = Array2f(n_x, n_y)          # (2, M) directions
+   y = xtk.xrt_apply((t, n), knot, order, f)
+
+This is the path for listmode PET, for a tilt series with gaps, and for a
+scanner you are still aligning. In 3-D use ``Array3f``. The directions need not
+be normalised.
+
+Structured or explicit
+----------------------
+
+The structured operators store one matrix per projection rather than every
+ray, so memory stays flat as the scan grows. They loop over projections and
+launch one kernel each, which is fine for a single pass and costly inside a
+solver.
 
 :py:func:`~xrt_toolkit.struct_rays` expands a structured scan into explicit
-rays in the same order. You then call the fused operators, which run about a
-hundred times faster per iteration. The cost is memory: every ray is stored.
+rays in the same order, so the fused operators apply. That runs about a hundred
+times faster per iteration; the cost is storing every ray, roughly 24 bytes
+each.
 
 .. code-block:: python
 

@@ -110,12 +110,21 @@ Geometry derivatives
 --------------------
 
 The projected basis is differentiable in the ray parameters, so the whole
-transform is too. :py:func:`~xrt_toolkit.xrt_ad_t_x` and its siblings return
+transform is too. Six functions cover the six coordinates of a ray:
 
 .. math::
 
-   \frac{\partial}{\partial t_{i}} (\mathbf{A} f), \qquad
-   \frac{\partial}{\partial n_{i}} (\mathbf{A} f).
+   \frac{\partial (\mathbf{A} f)}{\partial t_{x}},\;
+   \frac{\partial (\mathbf{A} f)}{\partial t_{y}},\;
+   \frac{\partial (\mathbf{A} f)}{\partial t_{z}},\qquad
+   \frac{\partial (\mathbf{A} f)}{\partial n_{x}},\;
+   \frac{\partial (\mathbf{A} f)}{\partial n_{y}},\;
+   \frac{\partial (\mathbf{A} f)}{\partial n_{z}},
+
+as :py:func:`~xrt_toolkit.xrt_ad_t_x` through
+:py:func:`~xrt_toolkit.xrt_ad_n_z`. The ``_z`` pair applies in 3-D. Chain them
+against whatever the rays depend on -- an angle, a detector offset, a centre of
+rotation -- to get the gradient of that parameter.
 
 You can therefore fit the acquisition geometry by gradient descent. The
 :doc:`gallery` recovers a detector shift this way, and the 2-D tutorial walks

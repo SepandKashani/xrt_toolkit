@@ -97,17 +97,36 @@ Reconstruction
 Geometry derivatives
 --------------------
 
+Six functions, one per ray coordinate: the derivative of the projection with
+respect to each component of the anchor :math:`\mathbf{t}` and of the
+direction :math:`\mathbf{n}`. The ``_z`` pair applies in 3-D only.
+
 .. autofunction:: xrt_toolkit.xrt_ad_t_x
+.. autofunction:: xrt_toolkit.xrt_ad_t_y
+.. autofunction:: xrt_toolkit.xrt_ad_t_z
+.. autofunction:: xrt_toolkit.xrt_ad_n_x
+.. autofunction:: xrt_toolkit.xrt_ad_n_y
+.. autofunction:: xrt_toolkit.xrt_ad_n_z
 
 .. code-block:: python
 
-   # fit an unknown detector shift by gradient descent
-   resid = xtk.xrt_apply(rays_at(s), knot, 1, f) - y_meas
-   gx = xtk.xrt_ad_t_x(rays_at(s), knot, 1, f)
-   gy = xtk.xrt_ad_t_y(rays_at(s), knot, 1, f)
-   s -= lr * float(dr.sum(resid * (Float(ux) * gx + Float(uy) * gy)).item())
+   # chain them to differentiate w.r.t. any parameter the rays depend on.
+   # here: one scalar detector shift along the in-plane axis (ux, uy)
+   resid = xtk.xrt_apply(rays_at(s), knot, order, f) - y_meas
+   gx = xtk.xrt_ad_t_x(rays_at(s), knot, order, f)
+   gy = xtk.xrt_ad_t_y(rays_at(s), knot, order, f)
+   grad = float(dr.sum(resid * (Float(ux) * gx + Float(uy) * gy)).item())
 
-.. autofunction:: xrt_toolkit.xrt_ad_n_x
+.. code-block:: python
+
+   # in 3-D all six are available, so the full Jacobian of one ray
+   # w.r.t. its own six numbers is
+   dt = [xtk.xrt_ad_t_x(rays, knot, order, f),
+         xtk.xrt_ad_t_y(rays, knot, order, f),
+         xtk.xrt_ad_t_z(rays, knot, order, f)]
+   dn = [xtk.xrt_ad_n_x(rays, knot, order, f),
+         xtk.xrt_ad_n_y(rays, knot, order, f),
+         xtk.xrt_ad_n_z(rays, knot, order, f)]
 
 Tensor tomography
 -----------------
