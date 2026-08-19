@@ -98,11 +98,10 @@ scan geometry as well as the image.
    transform
    geometry
    interop
-   pitfalls
    performance
-   alternatives
    tutorials
    api
+   pitfalls
    citing
    bibliography
 

@@ -38,10 +38,6 @@ Other packages
 .. [vanaarle2016] W. van Aarle et al. *Fast and flexible X-ray tomography
    using the ASTRA toolbox*. Optics Express, 24(22), 2016.
 
-.. [biguri2016] A. Biguri, M. Dosanjh, S. Hancock and M. Soleimani. *TIGRE: a
-   MATLAB-GPU toolbox for CBCT image reconstruction*. Biomedical Physics and
-   Engineering Express, 2(5), 2016.
-
 Datasets
 --------
 
