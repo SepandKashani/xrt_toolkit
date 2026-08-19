@@ -126,45 +126,54 @@ def _axis_arrow(ax, p0, p1, label, color, off, fs=10):
             fontsize=fs, ha="center", va="center")
 
 
-def lattice_figure():
-    """What start, step and num mean, and which lattice axis each detector axis spans."""
-    n2, n3, h = 5, 4, 1.0
-    fig = plt.figure(figsize=(5.4, 3.6))
-    ax = fig.add_subplot()
-
-    W, H = n2 * h, n3 * h
+def _lattice_panel(ax, nh, nv, h_span, v_span, h_axis, v_axis, ch, cv,
+                   title, out_of_page=None):
+    """One volume-lattice drawing: grid, start, step, and the two axes shown."""
+    W, H = float(nh), float(nv)
     ax.add_patch(plt.Rectangle((0, 0), W, H, facecolor="#e6f4ea", edgecolor=GREEN,
                                lw=1.4))
-    for k in range(1, n2):
-        ax.plot([k * h, k * h], [0, H], color=GREEN, lw=0.7, alpha=0.55)
-    for k in range(1, n3):
-        ax.plot([0, W], [k * h, k * h], color=GREEN, lw=0.7, alpha=0.55)
-    c2 = (np.arange(n2) + 0.5) * h
-    c3 = (np.arange(n3) + 0.5) * h
-    G2, G3 = np.meshgrid(c2, c3)
-    ax.plot(G2.ravel(), G3.ravel(), "o", color=GREEN, ms=3.0, alpha=0.55)
+    for k in range(1, nh):
+        ax.plot([k, k], [0, H], color=GREEN, lw=0.7, alpha=0.55)
+    for k in range(1, nv):
+        ax.plot([0, W], [k, k], color=GREEN, lw=0.7, alpha=0.55)
+    cx, cy = np.arange(nh) + 0.5, np.arange(nv) + 0.5
+    X, Y = np.meshgrid(cx, cy)
+    ax.plot(X.ravel(), Y.ravel(), "o", color=GREEN, ms=3.0, alpha=0.55)
 
-    # start: centre of voxel (0, 0, 0)
-    ax.plot(c2[0], c3[0], "o", color=GREEN, ms=7)
-    ax.annotate("start", xy=(c2[0], c3[0]), xytext=(c2[0] - 1.5, c3[0] - 1.0),
-                color=GREEN, fontsize=10,
-                arrowprops=dict(arrowstyle="-", color=GREEN, lw=1.0))
-    # step: centre-to-centre pitch
-    _span(ax, (c2[1], c3[2]), (c2[2], c3[2]), "step", GREEN, (0, 0.36))
+    ax.plot(cx[0], cy[0], "o", color=GREEN, ms=7)
+    ax.annotate("start", xy=(cx[0], cy[0]), xytext=(cx[0] - 1.45, cy[0] - 1.0),
+                color=GREEN, fontsize=9.5,
+                arrowprops=dict(arrowstyle="-", color=GREEN, lw=0.9))
+    _span(ax, (cx[0], cy[-1]), (cx[1], cy[-1]), "step", GREEN, (0, 0.34), fs=9)
 
-    _span(ax, (0, H + 0.55), (W, H + 0.55), "num[1] cells", BLUE, (0, 0.42))
-    _span(ax, (-0.55, 0), (-0.55, H), "num[2] cells", ORANGE, (-0.42, 0), rot=90)
+    _span(ax, (0, H + 0.55), (W, H + 0.55), h_span, ch, (0, 0.44), fs=9)
+    _span(ax, (-0.55, 0), (-0.55, H), v_span, cv, (-0.44, 0), fs=9, rot=90)
+    _axis_arrow(ax, (0, -0.85), (0.85 * W, -0.85), h_axis, ch, (0, -0.5), fs=9.5)
+    _axis_arrow(ax, (W + 0.85, 0), (W + 0.85, 0.85 * H), v_axis, cv, (1.15, 0.3),
+                fs=9.5)
+    if out_of_page:
+        y = H + 1.75
+        ax.plot(0.45, y, "o", mfc="white", mec=GREY, ms=11, mew=1.2)
+        ax.plot(0.45, y, ".", color=GREY, ms=4)
+        ax.text(0.95, y, out_of_page, color=GREY, fontsize=9, va="center")
+    ax.set_title(title, fontsize=10.5, color=INK)
+    ax.set_xlim(-2.7, W + 3.5)
+    ax.set_ylim(-2.3, H + (2.6 if out_of_page else 1.6))
+    ax.set_aspect("equal"); ax.set_anchor("N"); ax.axis("off")
 
-    _axis_arrow(ax, (0, -0.75), (0.9 * W, -0.75), "axis 2  (u1)", BLUE, (0, -0.45))
-    _axis_arrow(ax, (W + 0.75, 0), (W + 0.75, 0.9 * H), "axis 3  (u2)", ORANGE,
-                (1.05, 0.28))
-    ax.plot(c2[0] - 0.001, H + 1.6, "o", mfc="white", mec=GREY, ms=11, mew=1.2)
-    ax.plot(c2[0], H + 1.6, ".", color=GREY, ms=4)
-    ax.text(c2[0] + 0.42, H + 1.6, "axis 1  (num[0]), out of the page", color=GREY,
-            fontsize=9, va="center")
 
-    ax.set_xlim(-2.4, W + 3.4); ax.set_ylim(-2.0, H + 2.4)
-    ax.set_aspect("equal"); ax.axis("off")
+def lattice_figure():
+    """The voxel lattice: 2-D on the left, 3-D on the right."""
+    fig = plt.figure(figsize=(9.8, 4.3))
+    gs = fig.add_gridspec(1, 2, width_ratios=(1.0, 1.0), wspace=0.02)
+
+    _lattice_panel(fig.add_subplot(gs[0]), 3, 5,
+                   "num[0] cells", "num[1] cells",
+                   "axis 1", "axis 2  (u1)", GREY, BLUE, "2-D volume")
+    _lattice_panel(fig.add_subplot(gs[1]), 5, 4,
+                   "num[1] cells", "num[2] cells",
+                   "axis 2  (u1)", "axis 3  (u2)", BLUE, ORANGE, "3-D volume",
+                   out_of_page="axis 1  (num[0]), out of the page")
     save(fig, "schem_lattice.svg")
 
 
@@ -245,16 +254,16 @@ def geometry_schematics_3d():
     fig = plt.figure(figsize=(3.9, 3.9))
     ax = fig.add_subplot(projection="3d")
     _cube(ax, B)
-    L = 2.6 * B
+    L = 5.6 * B
     for y in (-0.62, 0.0, 0.62):
         for z in (-0.62, 0.0, 0.62):
             _ray3(ax, (-0.5 * L, y, z), (0.5 * L, y, z), BLUE, lw=1.0, dot=7)
     _plane(ax, (0.5 * L, 0, 0), (0, 1, 0), (0, 0, 1), 1.0, 1.0, BLUE)
-    ax.text(0.5 * L, -1.35, -1.25, "detector", color=BLUE, fontsize=9)
-    ax.plot([0, 0], [0, 0], [-1.75 * B, 1.75 * B], color="#57606a", lw=1.0,
+    ax.text(0.5 * L, -1.45, -1.35, "detector", color=BLUE, fontsize=9)
+    ax.plot([0, 0], [0, 0], [-1.8 * B, 1.8 * B], color="#57606a", lw=1.0,
             ls=(0, (4, 3)))
-    ax.text(0.05, 0.05, 1.85 * B, "rotation axis", color="#57606a", fontsize=8.5)
-    _tidy3(ax, 1.55)
+    ax.text(0.05, 0.05, 1.9 * B, "rotation axis", color="#57606a", fontsize=8.5)
+    _tidy3(ax, 2.2)
     save(fig, "schem_parallel_3d.svg")
 
     # ---- cone ----
@@ -278,18 +287,38 @@ def geometry_schematics_3d():
     save(fig, "schem_cone_3d.svg")
 
     # ---- arbitrary ----
-    fig = plt.figure(figsize=(3.9, 3.9))
+    C0, CM, FAINT = "#1f6feb", "#bf8700", "#8b949e"
+    fig = plt.figure(figsize=(5.9, 5.2))
     ax = fig.add_subplot(projection="3d")
     _cube(ax, B)
-    spec = [((-1.7, -0.7, 0.6), (1, 0.55, -0.35), "#1f6feb"),
-            ((0.5, -1.8, -0.5), (-0.3, 1, 0.5), "#d1242f"),
-            ((-1.5, 0.9, -1.2), (1, -0.45, 0.9), "#2da44e"),
-            ((1.6, 0.4, -1.5), (-0.9, -0.3, 1), "#8250df"),
-            ((-0.4, 1.7, 1.3), (0.35, -1, -0.75), "#bf8700")]
-    for p0, d, col in spec:
-        d = np.asarray(d, float); d /= np.linalg.norm(d)
-        _ray3(ax, p0, np.asarray(p0) + 3.3 * B * d, col, lw=1.4, dot=13)
-    _tidy3(ax, 1.75)
+    for p0, p1 in (((-1.70, 1.45, 0.95), (1.60, -1.15, -0.60)),
+                   ((0.30, -1.80, 1.50), (-0.90, 1.70, -1.30))):
+        _ray3(ax, p0, p1, FAINT, lw=1.0, dot=9, head=0.22)
+
+    t0, e0 = (-1.90, -1.40, -1.20), (1.50, 1.30, 1.40)
+    tM, eM = (-1.30, 0.60, 1.55), (1.20, 0.45, -1.50)
+    _ray3(ax, t0, e0, C0, lw=1.7, dot=26)
+    _ray3(ax, tM, eM, CM, lw=1.7, dot=26)
+    _tidy3(ax, 1.7)
+    ax.set_position([0.0, 0.05, 1.0, 0.90])
+
+    # Labels live in the corners; colour ties each one to its ray.
+    ax.text2D(0.005, 1.005, r"$\mathbf{t}^{(0)} = (t^{(0)}_x,\, t^{(0)}_y,\, "
+              r"t^{(0)}_z)$" "\n"
+              r"$\mathbf{n}^{(0)} = (n^{(0)}_x,\, n^{(0)}_y,\, n^{(0)}_z)$",
+              transform=ax.transAxes, ha="left", va="top", fontsize=9.5, color=C0)
+    ax.text2D(0.995, 1.005,
+              r"$\mathbf{t}^{(M-1)} = (t^{(M-1)}_x,\, t^{(M-1)}_y,\, "
+              r"t^{(M-1)}_z)$" "\n"
+              r"$\mathbf{n}^{(M-1)} = (n^{(M-1)}_x,\, n^{(M-1)}_y,\, "
+              r"n^{(M-1)}_z)$",
+              transform=ax.transAxes, ha="right", va="top", fontsize=9.5, color=CM)
+    ax.text2D(0.5, 0.12,
+              r"$\mathbf{t} = (\mathbf{t}^{(0)}, \ldots, \mathbf{t}^{(M-1)}),"
+              r"\quad \mathbf{n} = (\mathbf{n}^{(0)}, \ldots, "
+              r"\mathbf{n}^{(M-1)}) \ \in \mathbb{R}^{3 \times M}$",
+              transform=ax.transAxes, ha="center", va="top", fontsize=10.5,
+              color=INK)
     save(fig, "schem_explicit_3d.svg")
 
 
@@ -312,8 +341,8 @@ def geometry_schematics():
             lw=4.0, solid_capstyle="butt", zorder=3)
     ax.text(0.5 * L + 0.20, 0, "detector", rotation=90, va="center", fontsize=9,
             color=BLUE)
-    _rotation(ax, 2.05 * B, 0.42 * np.pi, 0.92 * np.pi, label_at=(-0.22, 0.30))
-    ax.set_xlim(-2.35, 2.35); ax.set_ylim(-2.0, 2.75)
+    _rotation(ax, 2.15 * B, 0.34 * np.pi, 0.78 * np.pi, label_at=(-0.30, 0.34))
+    ax.set_xlim(-2.75, 2.55); ax.set_ylim(-1.5, 2.5)
     ax.set_aspect("equal"); ax.axis("off")
     save(fig, "schem_parallel.svg")
 
@@ -334,7 +363,8 @@ def geometry_schematics():
         ends.append(y)
         _ray(ax, src, (xd, y), PURPLE, lw=0.95, dot=0.0)
     ax.plot(*src, "o", color=PURPLE, ms=7, zorder=5)
-    ax.text(src[0] + 0.10, src[1] + 0.26, "source", fontsize=9, color=PURPLE)
+    ax.text(src[0], src[1] - 0.42, "source", fontsize=9, color=PURPLE,
+            ha="center", va="top")
     h = max(abs(min(ends)), abs(max(ends)))
     ax.plot([xd, xd], [-h, h], color=PURPLE, lw=4.0, solid_capstyle="butt", zorder=3)
     ax.text(xd + 0.18, 0, "detector", rotation=90, va="center", fontsize=9,
@@ -351,17 +381,41 @@ def geometry_schematics():
     save(fig, "schem_cone.svg")
 
     # ---------------- arbitrary ----------------
-    fig, ax = plt.subplots(figsize=(3.8, 3.8))
+    C0, CM, FAINT = "#1f6feb", "#bf8700", "#8b949e"
+    fig, ax = plt.subplots(figsize=(6.0, 4.7))
     _lattice(ax, B)
-    spec = [((-1.55, 0.62), 0.10, "#1f6feb"),
-            ((0.05, -1.62), 1.42, "#d1242f"),
-            ((-1.30, -1.05), 0.62, "#2da44e"),
-            ((1.62, 0.10), 2.55, "#8250df"),
-            ((-0.35, 1.58), 5.05, "#bf8700")]
-    for (p0, a, col) in spec:
+    for p0, a in (((-1.95, 1.15), -0.60), ((1.90, 1.30), 3.52),
+                  ((-0.30, -1.95), 1.10)):
         d = np.array([np.cos(a), np.sin(a)])
-        _ray(ax, p0, np.asarray(p0) + 3.1 * B * d, col, lw=1.6, dot=5.0, head=9.0)
-    ax.set_xlim(-2.25, 2.35); ax.set_ylim(-2.25, 2.35)
+        _ray(ax, p0, np.asarray(p0) + 3.4 * B * d, FAINT, lw=1.1, dot=4.0, head=8.0)
+
+    t0, e0 = np.array([-2.30, -1.30]), np.array([1.35, 1.25])
+    tM, eM = np.array([-2.10, 1.45]), np.array([1.60, -1.20])
+    _ray(ax, t0, e0, C0, lw=1.8, dot=6.5, head=10.0)
+    _ray(ax, tM, eM, CM, lw=1.8, dot=6.5, head=10.0)
+
+    def corner(text, xy, frac, ha, va, color):
+        ax.annotate(text, xy=tuple(xy), xytext=frac, textcoords="axes fraction",
+                    ha=ha, va=va, fontsize=10, color=color,
+                    arrowprops=dict(arrowstyle="-", color=color, lw=0.8,
+                                    shrinkA=3, shrinkB=5))
+
+    corner(r"$\mathbf{t}^{(0)} = (t^{(0)}_x,\, t^{(0)}_y)$", t0,
+           (0.015, 0.04), "left", "bottom", C0)
+    corner(r"$\mathbf{n}^{(0)} = (n^{(0)}_x,\, n^{(0)}_y)$", e0,
+           (0.985, 0.96), "right", "top", C0)
+    corner(r"$\mathbf{t}^{(M-1)} = (t^{(M-1)}_x,\, t^{(M-1)}_y)$", tM,
+           (0.015, 0.96), "left", "top", CM)
+    corner(r"$\mathbf{n}^{(M-1)} = (n^{(M-1)}_x,\, n^{(M-1)}_y)$", eM,
+           (0.985, 0.04), "right", "bottom", CM)
+
+    ax.text(0.5, -0.03,
+            r"$\mathbf{t} = (\mathbf{t}^{(0)}, \ldots, \mathbf{t}^{(M-1)}),\quad "
+            r"\mathbf{n} = (\mathbf{n}^{(0)}, \ldots, \mathbf{n}^{(M-1)})"
+            r"\ \in \mathbb{R}^{2 \times M}$",
+            transform=ax.transAxes, ha="center", va="top", fontsize=10.5, color=INK)
+
+    ax.set_xlim(-3.5, 4.0); ax.set_ylim(-2.95, 2.55)
     ax.set_aspect("equal"); ax.axis("off")
     save(fig, "schem_explicit.svg")
 

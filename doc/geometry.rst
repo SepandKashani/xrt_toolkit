@@ -19,16 +19,34 @@ Conventions
 
 Two objects fix every convention. :py:class:`~xrt_toolkit.UniformSpec` describes
 the voxel lattice, :py:class:`~xrt_toolkit.DetectorSpec` the detector. The
-colours below carry through to the code: :xtkvol:`green` for the lattice,
+colours carry through to the code: :xtkvol:`green` for the lattice,
 :xtku1:`blue` for the ``u1`` detector axis, :xtku2:`orange` for ``u2``, and
 :xtkax1:`grey` for the remaining lattice axis and the beam.
 
+The volume
+~~~~~~~~~~
+
 .. figure:: _static/schem_lattice.svg
-   :width: 62%
+   :width: 96%
 
    ``start`` is the centre of the first voxel and ``step`` the pitch between
-   centres, so the lattice carries no separate origin. Each detector axis spans
-   one lattice axis: ``u1`` spans axis 2, ``u2`` spans axis 3.
+   centres, so the lattice carries no separate origin. In 2-D the beam travels
+   along axis 1 at :math:`\theta = 0`. In 3-D that axis points out of the page,
+   and the two drawn axes are the ones the detector spans.
+
+.. parsed-literal::
+
+   knot = xtk.UniformSpec(start=\ :xtkvol:`(-1.0, -2.0, -1.5)`, step=\ :xtkvol:`1.0`,
+                          num=(:xtkax1:`3`, :xtku1:`5`, :xtku2:`4`))          # 3-D
+
+   knot = xtk.UniformSpec(start=\ :xtkvol:`(-1.0, -2.0)`, step=\ :xtkvol:`1.0`,
+                          num=(:xtkax1:`3`, :xtku1:`5`))                # 2-D
+
+:py:meth:`~xrt_toolkit.UniformSpec.centered` gives that same ``start`` from the
+step and the counts alone.
+
+The detector
+~~~~~~~~~~~~
 
 .. figure:: _static/schem_detector.svg
    :width: 100%
@@ -37,27 +55,14 @@ colours below carry through to the code: :xtkvol:`green` for the lattice,
    as ``size[k] / num_cell[k]``. In 3-D, ``u2`` runs along the rotation axis, so
    ``size[1]`` sets the axial coverage.
 
-Both figures in code, with the same numbers:
-
 .. parsed-literal::
-
-   knot = xtk.UniformSpec(start=\ :xtkvol:`(-1.0, -2.0, -1.5)`, step=\ :xtkvol:`1.0`,
-                          num=(:xtkax1:`3`, :xtku1:`5`, :xtku2:`4`))
 
    det = xtk.DetectorSpec(size=(:xtku1:`12.0`, :xtku2:`8.0`),
-                          num_cell=(:xtku1:`6`, :xtku2:`4`))
+                          num_cell=(:xtku1:`6`, :xtku2:`4`))             # 3-D
+
+   det = xtk.DetectorSpec(size=(:xtku1:`12.0`,), num_cell=(:xtku1:`6`,))       # 2-D
 
    rays = xtk.parallel_beam(angles, det)        # sinogram (len(angles), :xtku1:`6`, :xtku2:`4`)
-
-:py:meth:`~xrt_toolkit.UniformSpec.centered` gives that same ``start`` from the
-step and the counts alone. Drop the last entry of each tuple for a 2-D problem:
-the beam then travels along axis 1 at :math:`\theta = 0`, and ``u1`` still spans
-axis 2.
-
-.. parsed-literal::
-
-   knot = xtk.UniformSpec.centered(step=\ :xtkvol:`1.0`, num=(:xtkax1:`3`, :xtku1:`5`))
-   det = xtk.DetectorSpec(size=(:xtku1:`12.0`,), num_cell=(:xtku1:`6`,))
 
 Three rules cover the rest.
 
@@ -65,8 +70,8 @@ Three rules cover the rest.
   ``cell_size``. The beam axis passes through the middle of the detector, which
   falls between two cells when ``num_cell`` is even.
 * The projection is laid out ``(angles, u1, u2)``, with ``u2`` fastest. That is
-  the numbering in the right-hand panel above. Reshape a sinogram to that order
-  and nothing else needs to change.
+  the numbering in the detector figure. Reshape a sinogram to that order and
+  nothing else needs to change.
 * Units are yours. Pass millimetres and the volume must be in millimetres too.
   Voxel units are the safer default in single precision; see :doc:`pitfalls`.
 
@@ -143,21 +148,23 @@ Arbitrary rays
 
       .. figure:: _static/schem_explicit.svg
 
-         Nothing has to be regular. Each ray carries its own point and
-         direction.
+         Nothing has to be regular. Ray :math:`l` carries its own anchor
+         :math:`\mathbf{t}^{(l)}` and direction :math:`\mathbf{n}^{(l)}`.
 
    .. grid-item::
 
       .. figure:: _static/schem_explicit_3d.svg
 
-         The same in 3-D. Rays need share neither an origin, a direction, nor a
-         detector.
+         The same in 3-D, where each anchor and direction gains a third
+         component. Label colours match the rays they name.
 
 .. code-block:: python
 
    t = Array2f(t_x, t_y)          # (2, M) anchors, one column per ray
    n = Array2f(n_x, n_y)          # (2, M) directions
    y = xtk.xrt_apply((t, n), knot, order, f)
+
+Rays need share neither an origin, a direction, nor a detector.
 
 This is the path for listmode PET, for a tilt series with gaps, and for a
 scanner you are still aligning. In 3-D use ``Array3f``. The directions need not
