@@ -37,98 +37,105 @@ def _lattice(ax, B, n=8):
         ax.plot([k, k], [-B, B], color="white", lw=0.6, zorder=1.5)
 
 
-def _chords(ax, t, n, R, color, lw=1.0, alpha=0.9):
-    """Draw each ray only where it crosses the disc of radius R."""
-    for (px, py), (dx, dy) in zip(t, n):
-        b = px * dx + py * dy
-        disc = b * b - (px * px + py * py - R * R)
-        if disc <= 0:
-            continue
-        r = np.sqrt(disc)
-        for s0, s1 in [(-b - r, -b + r)]:
-            ax.plot([px + s0 * dx, px + s1 * dx], [py + s0 * dy, py + s1 * dy],
-                    color=color, lw=lw, alpha=alpha, solid_capstyle="round", zorder=2)
+def _ray(ax, p0, p1, color, lw=1.1, dot=3.4, head=7.0):
+    """One ray: dot at the start, line, arrow tip exactly at the end."""
+    p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
+    d = p1 - p0
+    d = d / max(np.hypot(*d), 1e-12)
+    ax.plot([p0[0], p1[0]], [p0[1], p1[1]], color=color, lw=lw,
+            solid_capstyle="round", zorder=2)
+    ax.plot(*p0, "o", color=color, ms=dot, zorder=4)
+    ax.annotate("", xy=tuple(p1), xytext=tuple(p1 - 0.001 * d),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=lw,
+                                mutation_scale=head, shrinkA=0, shrinkB=0),
+                zorder=4)
+
+
+def _rotation(ax, r, a0, a1, label_at, color="#57606a"):
+    """Dashed arc with an arrowhead and the word 'rotation' beside the head."""
+    th = np.linspace(a0, a1, 80)
+    ax.plot(r * np.cos(th), r * np.sin(th), color=color, lw=1.0, ls=(0, (4, 3)),
+            zorder=2)
+    tip = np.array([r * np.cos(th[-1]), r * np.sin(th[-1])])
+    prev = np.array([r * np.cos(th[-4]), r * np.sin(th[-4])])
+    ax.annotate("", xy=tuple(tip), xytext=tuple(prev),
+                arrowprops=dict(arrowstyle="-|>", color=color, lw=1.2,
+                                mutation_scale=9, shrinkA=0, shrinkB=0))
+    ax.text(*(tip + label_at), "rotation", fontsize=9, color=color,
+            ha="center", va="center")
 
 
 def geometry_schematics():
-    """One clear drawing per geometry, using the rays the library builds."""
-    B, R = 1.0, 1.7
-    ks = xtk.UniformSpec(start=(-B + B / 8,) * 2, step=2 * B / 8, num=(8, 8))
+    """One drawing per geometry, from the rays the library builds. Vector output."""
+    B = 1.0
     BLUE, PURPLE = "#1f6feb", "#8250df"
 
     # ---------------- parallel ----------------
-    fig, ax = plt.subplots(figsize=(3.9, 3.9))
+    fig, ax = plt.subplots(figsize=(3.8, 3.8))
     _lattice(ax, B)
-    det = xtk.DetectorSpec(size=(2.4 * B,), num_cell=(13,))
+    det = xtk.DetectorSpec(size=(2.2 * B,), num_cell=(9,))
     rays = xtk.struct_rays(xtk.parallel_beam(Float([0.0]), det))
     t = np.asarray(rays[0]).T.reshape(-1, 2)
     n = np.asarray(rays[1]).T.reshape(-1, 2)
-    _chords(ax, t, n, R, BLUE, lw=1.0)
-    ax.plot([R + 0.13, R + 0.13], [-1.2 * B, 1.2 * B], color=BLUE, lw=4.0,
-            solid_capstyle="butt", zorder=3)
-    ax.text(R + 0.30, 0, "detector", rotation=90, va="center", fontsize=9, color=BLUE)
-    ax.annotate("", xy=(0.62 * R, 0.86 * B), xytext=(0.30 * R, 0.86 * B),
-                arrowprops=dict(arrowstyle="-|>", color=BLUE, lw=1.5))
-    th = np.linspace(0.35 * np.pi, 0.95 * np.pi, 60)
-    ax.plot(1.45 * R * np.cos(th), 1.45 * R * np.sin(th), color="#57606a", lw=1.0,
-            ls=(0, (4, 3)))
-    ax.annotate("", xy=(1.45 * R * np.cos(th[-1]), 1.45 * R * np.sin(th[-1])),
-                xytext=(1.45 * R * np.cos(th[-6]), 1.45 * R * np.sin(th[-6])),
-                arrowprops=dict(arrowstyle="-|>", color="#57606a", lw=1.2))
-    ax.text(-1.05 * R, 1.62 * R, "rotates", fontsize=9, color="#57606a")
-    ax.set_xlim(-2.7, 2.7); ax.set_ylim(-2.35, 2.8)
+    L = 3.0 * B                                   # every ray the same length
+    for p, d in zip(t, n):
+        _ray(ax, p - 0.5 * L * d, p + 0.5 * L * d, BLUE)
+    ax.plot([0.5 * L, 0.5 * L], [-1.2 * B, 1.2 * B], color=BLUE,
+            lw=4.0, solid_capstyle="butt", zorder=3)
+    ax.text(0.5 * L + 0.20, 0, "detector", rotation=90, va="center", fontsize=9,
+            color=BLUE)
+    _rotation(ax, 2.05 * B, 0.42 * np.pi, 0.92 * np.pi, label_at=(-0.22, 0.30))
+    ax.set_xlim(-2.35, 2.35); ax.set_ylim(-2.0, 2.75)
     ax.set_aspect("equal"); ax.axis("off")
-    save(fig, "schem_parallel.png")
+    save(fig, "schem_parallel.svg")
 
     # ---------------- cone ----------------
-    fig, ax = plt.subplots(figsize=(4.7, 3.5))
+    fig, ax = plt.subplots(figsize=(4.7, 3.6))
     _lattice(ax, B)
     sod, sdd = 2.5 * B, 4.5 * B
     rays = xtk.struct_rays(xtk.cone_beam(
         sod=sod, sdd=sdd, angles=Float([0.0]),
-        detector_spec=xtk.DetectorSpec(size=(2.9 * B,), num_cell=(13,))))
+        detector_spec=xtk.DetectorSpec(size=(2.7 * B,), num_cell=(9,))))
     t = np.asarray(rays[0]).T.reshape(-1, 2)
     n = np.asarray(rays[1]).T.reshape(-1, 2)
     src = t[0]
     xd = src[0] + sdd
     ends = []
-    for (dx, dy) in n:
-        s = (xd - src[0]) / dx
-        ends.append(src[1] + s * dy)
-        ax.plot([src[0], xd], [src[1], src[1] + s * dy], color=PURPLE, lw=0.8,
-                alpha=0.9, zorder=2)
+    for d in n:
+        y = src[1] + (xd - src[0]) / d[0] * d[1]
+        ends.append(y)
+        _ray(ax, src, (xd, y), PURPLE, lw=0.95, dot=0.0)
+    ax.plot(*src, "o", color=PURPLE, ms=7, zorder=5)
+    ax.text(src[0] + 0.10, src[1] + 0.26, "source", fontsize=9, color=PURPLE)
     h = max(abs(min(ends)), abs(max(ends)))
-    ax.plot(*src, "o", color=PURPLE, ms=7, zorder=4)
-    ax.text(src[0] + 0.08, src[1] + 0.22, "source", fontsize=9, color=PURPLE)
     ax.plot([xd, xd], [-h, h], color=PURPLE, lw=4.0, solid_capstyle="butt", zorder=3)
-    ax.text(xd + 0.16, 0, "detector", rotation=90, va="center", fontsize=9, color=PURPLE)
-    for y, ab, lab in ((-h - 0.30, (src[0], 0.0), "sod"),
-                       (-h - 0.72, (src[0], xd), "sdd")):
+    ax.text(xd + 0.18, 0, "detector", rotation=90, va="center", fontsize=9,
+            color=PURPLE)
+    for y, ab, lab in ((-h - 0.34, (src[0], 0.0), "sod"),
+                       (-h - 0.80, (src[0], xd), "sdd")):
         ax.annotate("", xy=(ab[1], y), xytext=(ab[0], y),
                     arrowprops=dict(arrowstyle="<->", color="#57606a", lw=1.0))
-        ax.text(sum(ab) / 2, y - 0.24, lab, ha="center", fontsize=9, color="#57606a")
-    ax.set_xlim(src[0] - 0.45, xd + 0.75)
-    ax.set_ylim(-h - 1.15, h + 0.35)
+        ax.text(sum(ab) / 2, y - 0.26, lab, ha="center", fontsize=9, color="#57606a")
+    _rotation(ax, 1.62 * B, 0.28 * np.pi, 0.86 * np.pi, label_at=(-0.62, 0.06))
+    ax.set_xlim(src[0] - 0.5, xd + 0.85)
+    ax.set_ylim(-h - 1.25, max(h, 1.55 * B) + 0.75)
     ax.set_aspect("equal"); ax.axis("off")
-    save(fig, "schem_cone.png")
+    save(fig, "schem_cone.svg")
 
     # ---------------- arbitrary ----------------
-    fig, ax = plt.subplots(figsize=(3.9, 3.9))
+    fig, ax = plt.subplots(figsize=(3.8, 3.8))
     _lattice(ax, B)
-    t = np.array([[-0.85, 0.5], [0.15, -0.9], [-0.4, -0.6], [0.7, 0.25], [0.0, 0.05]])
-    ang = np.array([0.18, 1.30, 0.72, 2.40, 1.95])
-    n = np.stack([np.cos(ang), np.sin(ang)], 1)
-    for p0, d, col in zip(t, n, ["#1f6feb", "#d1242f", "#2da44e", "#8250df", "#bf8700"]):
-        _chords(ax, [p0], [d], R, col, lw=1.7, alpha=0.95)
-        ax.plot(*p0, "o", color=col, ms=5.5, zorder=4)
-        e = p0 + (np.sqrt(max(R * R - (p0[0] * d[1] - p0[1] * d[0]) ** 2, 0))
-                  - (p0 @ d)) * d
-        ax.annotate("", xy=e, xytext=e - 0.34 * d,
-                    arrowprops=dict(arrowstyle="-|>", color=col, lw=1.6))
-    ax.text(0, -2.05, "each ray: one point, one direction", ha="center", fontsize=9)
-    ax.set_xlim(-2.15, 2.15); ax.set_ylim(-2.35, 2.15)
+    spec = [((-1.55, 0.62), 0.10, "#1f6feb"),
+            ((0.05, -1.62), 1.42, "#d1242f"),
+            ((-1.30, -1.05), 0.62, "#2da44e"),
+            ((1.62, 0.10), 2.55, "#8250df"),
+            ((-0.35, 1.58), 5.05, "#bf8700")]
+    for (p0, a, col) in spec:
+        d = np.array([np.cos(a), np.sin(a)])
+        _ray(ax, p0, np.asarray(p0) + 3.1 * B * d, col, lw=1.6, dot=5.0, head=9.0)
+    ax.set_xlim(-2.25, 2.35); ax.set_ylim(-2.25, 2.35)
     ax.set_aspect("equal"); ax.axis("off")
-    save(fig, "schem_explicit.png")
+    save(fig, "schem_explicit.svg")
 
 
 def bases():

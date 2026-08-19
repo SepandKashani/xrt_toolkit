@@ -8,7 +8,7 @@ same kernels.
 Parallel beam
 -------------
 
-.. figure:: _static/schem_parallel.png
+.. figure:: _static/schem_parallel.svg
    :width: 46%
 
    One angle of a parallel scan. Every ray shares a direction; the whole
@@ -28,7 +28,7 @@ and the same call becomes a 3-D scan that rotates about the third lattice axis.
 Cone beam
 ---------
 
-.. figure:: _static/schem_cone.png
+.. figure:: _static/schem_cone.svg
    :width: 62%
 
    A point source, a divergent fan, and a flat detector. ``sod`` is the
@@ -49,7 +49,7 @@ through the volume at :math:`\theta` and at :math:`\theta + \pi`.
 Arbitrary rays
 --------------
 
-.. figure:: _static/schem_explicit.png
+.. figure:: _static/schem_explicit.svg
    :width: 46%
 
    Nothing has to be regular. Each ray carries its own point and direction.

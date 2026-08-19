@@ -14,7 +14,7 @@ class TOFSpec:
        \xrt_{\text{TOF}}[f](\bbn, \bbt)
        =
        \int_{\bR} f(\bbt + \alpha \hat{\bbn}) \,
-       g_{\sigma}(\alpha - \mu) \, d\alpha,
+       g_{\sigma}(\alpha - \mu) \, \mathrm{d}\alpha,
        \qquad
        g_{\sigma}(\alpha) = \frac{1}{\sigma\sqrt{2\pi}}
        \exp\!\left(-\frac{\alpha^{2}}{2\sigma^{2}}\right),

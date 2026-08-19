@@ -75,25 +75,24 @@ def xrt_apply(
        f(\bbx)
        =
        \sum_{\bbq \in \discreteRange{\bbZero}{\bbQ-1}}
-       f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
+       f_{\bbq} \psi(\bbx - \bbx_{\bbq}),
 
     with
 
     .. math::
 
-       f_{\bbq} \in \bR,
-       \bbx_{q} = \bbx_{0} + \bbq \odot \bbDelta,
-           \bbx_{0} \in \bR^{D},
-           \bbDelta \in \bR_{+}^{D},
-       \psi(\bbx; \bbE \in \bR^{D \times N}) =
-           box-spline with direction vectors
-           \{ \bbe_{l} \in \bR^{D} \}_{l=1..N}
+       f_{\bbq} \in \bR, \qquad
+       \bbx_{\bbq} = \bbx_{0} + \bbq \odot \bbDelta, \qquad
+       \bbx_{0} \in \bR^{D}, \qquad
+       \bbDelta \in \bR_{+}^{D},
+
+    where :math:`\psi` is a separable spline of degree `order` on the lattice.
 
     Then ``xrt_apply()`` computes samples of
 
     .. math::
 
-       \xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) d\alpha
+       \xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) \, \mathrm{d}\alpha
 
     Parameters
     ----------
@@ -102,31 +101,17 @@ def xrt_apply(
     knot_spec: UniformSpec
         Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
     order: 0 | 1 | 2
-        Data interpolation order.
+        Degree of the spline :math:`\psi` on the lattice:
 
-        This parameter sets which :math:`\psi` is used to interpolate data values:
+        * 0: voxels, so the matrix entries are chord lengths;
+        * 1: linear;
+        * 2: quadratic.
 
-        * order = 0 (2D, 3D):
+        Higher degrees are smoother and their projections are wider. In 3D,
+        any degree above 0 is much slower than 0.
 
-          .. math::
-
-             \bbE = \diag(\bbDelta)
-
-        * order = 1 (2D):
-
-          .. math::
-
-             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}
-                               0  \bbDelta_{2} \bbDelta_{2}]
-
-        * order = 2 (2D):
-
-          .. math::
-
-             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}  \bbDelta_{1}
-                               0  \bbDelta_{2} \bbDelta_{2} -\bbDelta_{2}]
-
-        The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
+        :py:func:`~xrt_toolkit.plot_2d_basis` draws the support of
+        :math:`\psi` and its projections.
 
     data: FloatT
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
@@ -366,7 +351,27 @@ def xrt_adjoint(
     r"""
     Compute 2D/3D back-projections.
 
-    Adjoint of ``xrt_apply()``: maps projection weights to volume expansion coefficients.
+    Exact adjoint of ``xrt_apply()``: it maps projection weights back to volume
+    expansion coefficients. Writing :math:`\bbA` for the matrix ``xrt_apply()``
+    applies, with
+
+    .. math::
+
+       [\bbA]_{l \bbq}
+       =
+       \int_{\bR} \psi(\bbt_{l} + \alpha \bbn_{l} - \bbx_{\bbq})
+       \, \mathrm{d}\alpha,
+
+    this routine computes :math:`\bbA^{\top} y`, that is
+
+    .. math::
+
+       (\bbA^{\top} y)_{\bbq} = \sum_{l} [\bbA]_{l \bbq} \, y_{l}.
+
+    The same traversal visits the same cells with the same weights as the
+    forward pass and scatters instead of gathering, so
+    :math:`\langle \bbA f, y \rangle = \langle f, \bbA^{\top} y \rangle` holds
+    to machine precision.
 
     Parameters
     ----------

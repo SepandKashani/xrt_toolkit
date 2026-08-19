@@ -139,7 +139,7 @@ def xrt_tensor_apply(
 ) -> FloatT:
     r"""
     Contracted multi-channel projection
-    :math:`y_l = \sum_c w_{c,l} \int f_c(\mathbf{t}_l + \alpha \mathbf{n}_l) d\alpha`
+    :math:`y_l = \sum_c w_{c,l} \int f_c(\mathbf{t}_l + \alpha \mathbf{n}_l) \, \mathrm{d}\alpha`
     in a single fused traversal.
 
     Parameters
