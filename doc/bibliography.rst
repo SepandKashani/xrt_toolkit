@@ -45,9 +45,10 @@ Other packages
 Datasets
 --------
 
-.. [fips_walnut] Finnish Inverse Problems Society. *Cone-beam CT of a walnut*.
-   Zenodo 6986012, CC-BY-4.0. Used for the cone-beam panel of the
-   :doc:`gallery`.
+.. [dersarkissian2019] H. Der Sarkissian, F. Lucka, M. van Eijnatten,
+   G. Colacicco, S. B. Coban and K. J. Batenburg. *A cone-beam X-ray computed
+   tomography data collection designed for machine learning*. Scientific Data,
+   6:215, 2019. The Walnut scan in the :doc:`gallery`.
 
 .. [czi10489] Chan Zuckerberg Initiative CryoET Data Portal, dataset 10489, run
    ``Vibrio_pilT_pilU_131``. Whole *Vibrio cholerae* cells with a sheathed
@@ -61,10 +62,7 @@ Datasets
    ``GE_DMI4_NEMA_IQ``, GE Discovery MI 4-ring, CC-BY-4.0.
    https://github.com/SyneRBI/PETRIC
 
-.. [looms2010] M. C. Looms, K. H. Jensen, A. Binley and L. Nielsen.
-   *Monitoring unsaturated flow and transport using cross-borehole
-   geophysical methods*. Geophysics, 75(6):J29-J41, 2010. The Arrenaes
-   crosshole GPR traveltimes.
+
 
 Tensor tomography
 -----------------

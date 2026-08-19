@@ -4,103 +4,120 @@ Gallery
 Real data
 ---------
 
-Every reconstruction in this section comes from measured data in a public
-archive. The scripts are in ``xtk_experiments/realdata``, and that folder's
-README records the download, the preprocessing and the caveats.
+Every reconstruction here comes from measured data in a public archive. The
+scripts are in ``xtk_experiments/realdata``.
 
 Cryo-electron tomography
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-A whole *Vibrio cholerae* cell, from CZ CryoET Data Portal dataset 10489
-[czi10489]_. A single-axis tilt series: 41 tilts from -53 to +67 degrees,
-1023 x 1440, 13.3 A per pixel.
+A whole *Vibrio cholerae* cell, CZ CryoET Data Portal dataset 10489
+[czi10489]_. 41 tilts from -53 to +67 degrees, 1023 x 1440, 13.3 A per pixel.
 
 .. figure:: _static/real_cryoet_vibrio.png
+   :width: 78%
 
-   Two slabs from the XTK reconstruction, beside the depositors' own tomogram.
-   The cell envelope, both polyphosphate granules and the appendage all appear
-   in the same places.
+   The cell envelope, both polyphosphate granules and the appendage.
 
-Use weighted backprojection here, not conjugate gradients. Ramp-filter each
-tilt along the direction across the tilt axis, then backproject once. The
-problem is heavily underdetermined, and a few CG iterations return a
-low-frequency blur in which the granules disappear.
+Plain CG on :math:`\mathbf{A}^{\top}\mathbf{A}` returns a blur here: 41 tilts
+over 120 degrees leave the problem badly underdetermined, and
+:math:`\mathbf{A}^{\top}\mathbf{A}` behaves like :math:`1/|k|`. Weighting the
+normal equations by the ramp filter :math:`\mathbf{W}` fixes that, because
+:math:`\mathbf{A}^{\top}\mathbf{W}\mathbf{A}` is close to the identity. Eight
+iterations take 8 seconds.
 
 .. code-block:: python
 
    # single-axis tilt, parallel beam, tilt axis along image y
-   t = Array3f(ca[:, None] * u, v, -sa[:, None] * u)
-   n = Array3f(sa[:, None] + 0 * u, 0 * u, ca[:, None] + 0 * u)
-   rec = xrt_adjoint((t, n), knot, 0, Float(ramp_filtered.ravel()))
+   for th in np.deg2rad(angles):
+       c, s = np.cos(th), np.sin(th)
+       tx.append(U * c); ty.append(V); tz.append(-U * s)
+       nx.append(np.full(U.size, s)); ny.append(0 * U); nz.append(np.full(U.size, c))
+   ray = (Array3f(cat(tx), cat(ty), cat(tz)), Array3f(cat(nx), cat(ny), cat(nz)))
+
+   def ramp(d):                       # W: ramp filter across the tilt axis
+       a = np.asarray(d).reshape(n_tilt, NU, NV)
+       return Float(np.real(np.fft.ifft(np.fft.fft(a, axis=1) * W[None, :, None],
+                                        axis=1)).astype(np.float32).ravel())
+
+   A  = lambda f: xrt_apply(ray, knot, 0, f)
+   At = lambda d: S * xrt_adjoint(ray, knot, 0, d)
+   rec = cg(lambda f: At(ramp(A(f))), At(ramp(y)), n_iter=8)
 
 Cone-beam CT
 ~~~~~~~~~~~~
 
-The FIPS walnut scan, Zenodo 6986012 [fips_walnut]_, CC-BY-4.0. Explicit
-per-pixel cone-beam rays, 14.9 M of them, solved by CGLS.
+Walnut 1 of the collection of Der Sarkissian and co-workers
+[dersarkissian2019]_. The dataset ships an ASTRA ``cone_vec`` geometry file, so
+:py:func:`~xrt_toolkit.from_astra` reads it as it stands.
 
 .. figure:: _static/real_ct_walnut_conebeam.png
 
-   Shell, kernel lobes and septum resolved. Data RMSE 0.0152. The walnut
-   measures 33 x 30 x 42 mm.
+   603 projections, 113 M rays, a 500\ :sup:`3` reconstruction by 30
+   conjugate-gradient iterations. Shell, kernel and septum resolve.
+
+.. code-block:: python
+
+   g = np.loadtxt("scan_geom_corrected.geom")     # ASTRA cone_vec, 12 columns
+   g[:, 0:6] /= voxel_mm                          # positions    -> voxel units
+   g[:, 6:12] *= bin / voxel_mm                   # detector axes -> voxel units
+
+   rays, knot = xtk.from_astra(
+       {"type": "cone_vec", "DetectorRowCount": n_v,
+        "DetectorColCount": n_u, "Vectors": g}, vol_geom)
+
+   y = Float(np.transpose(L, (1, 0, 2)).reshape(-1))   # (det_v, angles, det_u)
+   rec = xtk.cg(lambda v: xtk.xrt_apply(rays, knot, 0, v),
+                lambda v: xtk.xrt_adjoint(rays, knot, 0, v), y, N**3, n_iter=30)
 
 Tensor tomography
 ~~~~~~~~~~~~~~~~~
 
 Small-angle scattering tensor tomography of trabecular bone, Zenodo 10074598
-[saxstt_bone]_. The fused multi-channel operator carries all spherical-harmonic
-channels through one lattice traversal.
+[saxstt_bone]_. The fused operator carries every spherical-harmonic channel
+through one lattice traversal.
 
-.. figure:: _static/real_tensor_saxstt_bone.png
+.. figure:: _static/real_tensor_orientation.png
+   :width: 62%
 
-   The tensor model predicts held-out projections with R2 = 0.964, against
-   0.846 for an isotropic model. Panel (f) shows the fitted fibre orientation.
+   Degree of orientation: 0 where the mineral is isotropic, 1 where it is
+   fully aligned. The tensor model predicts held-out projections with
+   R\ :sup:`2` = 0.964, against 0.846 for an isotropic model.
+
+.. code-block:: python
+
+   w = xtk.lrt_weights(ray_n)                 # (L, C) contraction weights
+   y = xtk.xrt_tensor_apply(rays, knot, order, f, w)      # all C channels, one pass
+   b = xtk.xrt_tensor_adjoint(rays, knot, order, r, w)
 
 TOF-PET
 ~~~~~~~
 
 Real time-of-flight lines of response from the PETRIC ``GE_DMI4_NEMA_IQ``
-dataset [petric]_, a GE Discovery MI 4-ring scanner, CC-BY-4.0. 33.7 M LORs,
-with TOF weighting through ``tof=TOFSpec(center, sigma)``.
+dataset [petric]_, a GE Discovery MI 4-ring scanner. 33.7 M lines of response,
+each an explicit ray with its own time-of-flight offset.
 
 .. figure:: _static/real_pet_tof_nema.png
 
-   The NEMA phantom outline, the hot spheres and the cold insert all recover.
+   The NEMA phantom outline, the hot spheres and the cold insert.
 
-This panel is noisier than the PETRIC reference, and the reason is counts, not
-the operator. The extracted subset leaves 0.53 prompt counts per support voxel,
-so unregularised MLEM is Poisson-dominated. The reference is BSREM on the full
-data. Three checks show the model itself is right: forward-projecting the
-reference correlates best with the data for the TOF sign as stored, the Poisson
-log-likelihood at the reference beats the zero image, and the calibrated
-operator scale matches the analytic value to 1.5 per cent.
+.. code-block:: python
 
-Bent-ray crosshole GPR
-~~~~~~~~~~~~~~~~~~~~~~
-
-Ground-penetrating radar traveltimes from Arrenaes, published by Looms and
-co-workers [looms2010]_. Rays bend, so this uses the refractive marcher and its
-Fermat-matched adjoint.
-
-.. figure:: _static/real_gpr_crosshole_bentray.png
-
-   Traveltime RMSE falls from 2.53 to 0.61 ns, against a pick uncertainty of
-   0.8 ns. pyGIMLi and the published Bayesian posterior confirm the structure
-   independently.
+   # every LOR is a ray; TOF localises the emission along it
+   rays = (Array3f(*end1.T), Array3f(*(end2 - end1).T))
+   tof = xtk.TOFSpec(center=offset_mm, sigma=sigma_mm)
+   y = xtk.xrt_apply(rays, knot, 0, f, tof=tof)
 
 Synthetic examples
 ------------------
 
-These three come from ``doc/make_figures.py`` and rebuild in one command.
+These come from ``doc/make_figures.py`` and rebuild in one command.
 
 Cone-beam FDK
 ~~~~~~~~~~~~~
 
-A 192\ :sup:`3` phantom, 720 views, one call.
-
 .. figure:: _static/gallery_cone.png
 
-   Three orthogonal slices.
+   A 192\ :sup:`3` phantom, 720 views, three orthogonal slices.
 
 .. code-block:: python
 
@@ -115,12 +132,10 @@ A 192\ :sup:`3` phantom, 720 views, one call.
 Fitting the geometry
 ~~~~~~~~~~~~~~~~~~~~
 
-The scan below has an unknown detector shift. Gradient descent on the ray
-positions recovers it to four decimals.
-
 .. figure:: _static/gallery_calibration.png
 
-   True shift 1.5 voxels, fitted 1.5000.
+   An unknown detector shift, recovered by gradient descent. True 1.5 voxels,
+   fitted 1.5000.
 
 .. code-block:: python
 
@@ -138,13 +153,10 @@ positions recovers it to four decimals.
 Few views
 ~~~~~~~~~
 
-Twenty projections. Filtered backprojection streaks. Conjugate gradients on the
-same rays does better, because it fits the data instead of inverting an
-incomplete integral.
-
 .. figure:: _static/gallery_sparse.png
 
-   Phantom, ``fbp`` with a Hann window, and ``cg`` after 40 iterations.
+   Twenty projections. Phantom, ``fbp`` with a Hann window, and ``cg`` after
+   40 iterations.
 
 .. code-block:: python
 
@@ -158,8 +170,6 @@ incomplete integral.
 
 Basis functions
 ~~~~~~~~~~~~~~~
-
-The support of the box spline and its projections.
 
 .. list-table::
    :widths: 33 33 33
