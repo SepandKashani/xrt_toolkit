@@ -14,34 +14,45 @@ A whole *Vibrio cholerae* cell, CZ CryoET Data Portal dataset 10489
 [czi10489]_. 41 tilts from -53 to +67 degrees, 1023 x 1440, 13.3 A per pixel.
 
 .. figure:: _static/real_cryoet_vibrio.png
-   :width: 78%
+   :width: 76%
 
-   The cell envelope, both polyphosphate granules and the appendage.
+   The cell envelope, both polyphosphate granules and the appendage. No
+   filtering: 25 CGLS iterations, 5 seconds.
 
-Plain CG on :math:`\mathbf{A}^{\top}\mathbf{A}` returns a blur here: 41 tilts
-over 120 degrees leave the problem badly underdetermined, and
-:math:`\mathbf{A}^{\top}\mathbf{A}` behaves like :math:`1/|k|`. Weighting the
-normal equations by the ramp filter :math:`\mathbf{W}` fixes that, because
-:math:`\mathbf{A}^{\top}\mathbf{W}\mathbf{A}` is close to the identity. Eight
-iterations take 8 seconds.
+A single-axis tilt series is a parallel-beam scan, so
+:py:func:`~xrt_toolkit.parallel_beam` builds it.
+:py:func:`~xrt_toolkit.parallel_beam` rotates about the third lattice axis and
+its first detector axis spans the second, so put the tilt axis on axis 3 and
+the thin specimen direction on axis 1.
 
 .. code-block:: python
 
-   # single-axis tilt, parallel beam, tilt axis along image y
-   for th in np.deg2rad(angles):
-       c, s = np.cos(th), np.sin(th)
-       tx.append(U * c); ty.append(V); tz.append(-U * s)
-       nx.append(np.full(U.size, s)); ny.append(0 * U); nz.append(np.full(U.size, c))
-   ray = (Array3f(cat(tx), cat(ty), cat(tz)), Array3f(cat(nx), cat(ny), cat(nz)))
+   knot = xtk.UniformSpec.centered(step=px, num=(NZ, NU, NV))
+   det = xtk.DetectorSpec(size=(NU * px, NV * px), num_cell=(NU, NV))
+   rays = xtk.parallel_beam(Float(np.deg2rad(tilt_angles)), det)
+   re = xtk.struct_rays(rays)
 
-   def ramp(d):                       # W: ramp filter across the tilt axis
-       a = np.asarray(d).reshape(n_tilt, NU, NV)
-       return Float(np.real(np.fft.ifft(np.fft.fft(a, axis=1) * W[None, :, None],
-                                        axis=1)).astype(np.float32).ravel())
+   y = Float(np.transpose(g, (0, 2, 1)).ravel())        # (tilt, u1, u2)
+   A, At = (lambda f: xtk.xrt_apply(re, knot, 0, f),
+            lambda d: xtk.xrt_adjoint(re, knot, 0, d))
 
-   A  = lambda f: xrt_apply(ray, knot, 0, f)
-   At = lambda d: S * xrt_adjoint(ray, knot, 0, d)
-   rec = cg(lambda f: At(ramp(A(f))), At(ramp(y)), n_iter=8)
+   x, r = dr.zeros(Float, n_vox), Float(y)              # CGLS
+   s = At(r); p = Float(s); gam = dr.sum(s * s)
+   for _ in range(25):
+       q = A(p)
+       al = gam / dr.sum(q * q)
+       x = dr.fma(al, p, x); r = dr.fma(-al, q, r)
+       s = At(r); gnew = dr.sum(s * s)
+       p = dr.fma(gnew / gam, p, s); gam = gnew
+
+.. note::
+
+   Use CGLS, not CG on :math:`\mathbf{A}^{\top}\mathbf{A}`. CGLS keeps its
+   residual in data space and survives single precision here; CG on the normal
+   equations breaks down within a few iterations on this problem. Stop CGLS at
+   about 25 iterations. Past that the fp32 recursion degrades too, and early
+   stopping is in any case the usual regulariser for a tilt series that covers
+   only 120 degrees.
 
 Cone-beam CT
 ~~~~~~~~~~~~
@@ -73,20 +84,21 @@ Tensor tomography
 ~~~~~~~~~~~~~~~~~
 
 Small-angle scattering tensor tomography of trabecular bone, Zenodo 10074598
-[saxstt_bone]_. The fused operator carries every spherical-harmonic channel
-through one lattice traversal.
+[saxstt_bone]_. Every voxel carries a full scattering distribution rather than
+one number, and the fused operator pushes all its spherical-harmonic channels
+through a single lattice traversal.
 
 .. figure:: _static/real_tensor_orientation.png
    :width: 62%
 
-   Degree of orientation: 0 where the mineral is isotropic, 1 where it is
-   fully aligned. The tensor model predicts held-out projections with
-   R\ :sup:`2` = 0.964, against 0.846 for an isotropic model.
+   How aligned the mineral is, slice by slice. Dark means the scattering is
+   the same in every direction; bright means it points one way. The struts run
+   bright along their length, which is what bone does.
 
 .. code-block:: python
 
    w = xtk.lrt_weights(ray_n)                 # (L, C) contraction weights
-   y = xtk.xrt_tensor_apply(rays, knot, order, f, w)      # all C channels, one pass
+   y = xtk.xrt_tensor_apply(rays, knot, order, f, w)     # all C channels, one pass
    b = xtk.xrt_tensor_adjoint(rays, knot, order, r, w)
 
 TOF-PET
@@ -99,6 +111,13 @@ each an explicit ray with its own time-of-flight offset.
 .. figure:: _static/real_pet_tof_nema.png
 
    The NEMA phantom outline, the hot spheres and the cold insert.
+
+This panel is softer than a clinical reconstruction of the same phantom, and
+the reason is counts rather than the operator. The extracted subset is one
+segment of 205 and every fourth view, which leaves 0.53 prompt counts per
+support voxel: fewer counts than unknowns. Unregularised MLEM on that is
+Poisson-dominated, so it needs a post-filter, and the post-filter is what costs
+the resolution.
 
 .. code-block:: python
 
