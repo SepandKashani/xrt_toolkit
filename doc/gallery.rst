@@ -1,53 +1,106 @@
 Gallery
 =======
 
-Every figure comes from ``doc/make_figures.py``. Rebuild them with one
-command. The first uses public measured data; the rest use a synthetic
-phantom.
+Real data
+---------
 
-A real scan
------------
+Every reconstruction in this section comes from measured data in a public
+archive. The scripts are in ``xtk_experiments/realdata``, and that folder's
+README records the download, the preprocessing and the caveats.
 
-Walnut 1 of the public cone-beam collection of Der Sarkissian and co-workers
-[dersarkissian2019]_: 3 x 1200 projections on a 972 x 768 detector, three
-source heights, 100 um voxels. The dataset ships an ASTRA ``cone_vec``
-geometry file, so :py:func:`~xrt_toolkit.from_astra` reads it as it stands.
+Cryo-electron tomography
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. figure:: _static/gallery_walnut.png
+A whole *Vibrio cholerae* cell, from CZ CryoET Data Portal dataset 10489
+[czi10489]_. A single-axis tilt series: 41 tilts from -53 to +67 degrees,
+1023 x 1440, 13.3 A per pixel.
 
-   603 of the 3603 projections, 113 M rays, reconstructed on a 500\ :sup:`3`
-   grid by 30 conjugate-gradient iterations.
+.. figure:: _static/real_cryoet_vibrio.png
+
+   Two slabs from the XTK reconstruction, beside the depositors' own tomogram.
+   The cell envelope, both polyphosphate granules and the appendage all appear
+   in the same places.
+
+Use weighted backprojection here, not conjugate gradients. Ramp-filter each
+tilt along the direction across the tilt axis, then backproject once. The
+problem is heavily underdetermined, and a few CG iterations return a
+low-frequency blur in which the granules disappear.
 
 .. code-block:: python
 
-   g = np.loadtxt("scan_geom_corrected.geom")     # ASTRA cone_vec, 12 columns
-   g[:, 0:6] /= voxel_mm                          # positions -> voxel units
-   g[:, 6:12] *= bin / voxel_mm                   # detector axes -> voxel units
-
-   rays, knot = xtk.from_astra(
-       {"type": "cone_vec", "DetectorRowCount": n_v,
-        "DetectorColCount": n_u, "Vectors": g}, vol_geom)
-
-   y = Float(np.transpose(L, (1, 0, 2)).reshape(-1))   # (det_v, angles, det_u)
-   rec = xtk.cg(lambda v: xtk.xrt_apply(rays, knot, 0, v),
-                lambda v: xtk.xrt_adjoint(rays, knot, 0, v), y, N**3, n_iter=30)
-
-.. note::
-
-   Two conventions of this dataset are easy to miss. Each frame is stored
-   transposed and flipped, so ``np.transpose(np.flipud(image))`` gives the
-   ``(v, u)`` order the geometry expects. And the projections pair with the
-   geometry rows in reverse order. Get either wrong and the reconstruction
-   comes out as concentric rings.
+   # single-axis tilt, parallel beam, tilt axis along image y
+   t = Array3f(ca[:, None] * u, v, -sa[:, None] * u)
+   n = Array3f(sa[:, None] + 0 * u, 0 * u, ca[:, None] + 0 * u)
+   rec = xrt_adjoint((t, n), knot, 0, Float(ramp_filtered.ravel()))
 
 Cone-beam CT
-------------
+~~~~~~~~~~~~
 
-A 192\ :sup:`3` phantom, 720 views, reconstructed by FDK in one call.
+The FIPS walnut scan, Zenodo 6986012 [fips_walnut]_, CC-BY-4.0. Explicit
+per-pixel cone-beam rays, 14.9 M of them, solved by CGLS.
+
+.. figure:: _static/real_ct_walnut_conebeam.png
+
+   Shell, kernel lobes and septum resolved. Data RMSE 0.0152. The walnut
+   measures 33 x 30 x 42 mm.
+
+Tensor tomography
+~~~~~~~~~~~~~~~~~
+
+Small-angle scattering tensor tomography of trabecular bone, Zenodo 10074598
+[saxstt_bone]_. The fused multi-channel operator carries all spherical-harmonic
+channels through one lattice traversal.
+
+.. figure:: _static/real_tensor_saxstt_bone.png
+
+   The tensor model predicts held-out projections with R2 = 0.964, against
+   0.846 for an isotropic model. Panel (f) shows the fitted fibre orientation.
+
+TOF-PET
+~~~~~~~
+
+Real time-of-flight lines of response from the PETRIC ``GE_DMI4_NEMA_IQ``
+dataset [petric]_, a GE Discovery MI 4-ring scanner, CC-BY-4.0. 33.7 M LORs,
+with TOF weighting through ``tof=TOFSpec(center, sigma)``.
+
+.. figure:: _static/real_pet_tof_nema.png
+
+   The NEMA phantom outline, the hot spheres and the cold insert all recover.
+
+This panel is noisier than the PETRIC reference, and the reason is counts, not
+the operator. The extracted subset leaves 0.53 prompt counts per support voxel,
+so unregularised MLEM is Poisson-dominated. The reference is BSREM on the full
+data. Three checks show the model itself is right: forward-projecting the
+reference correlates best with the data for the TOF sign as stored, the Poisson
+log-likelihood at the reference beats the zero image, and the calibrated
+operator scale matches the analytic value to 1.5 per cent.
+
+Bent-ray crosshole GPR
+~~~~~~~~~~~~~~~~~~~~~~
+
+Ground-penetrating radar traveltimes from Arrenaes, published by Looms and
+co-workers [looms2010]_. Rays bend, so this uses the refractive marcher and its
+Fermat-matched adjoint.
+
+.. figure:: _static/real_gpr_crosshole_bentray.png
+
+   Traveltime RMSE falls from 2.53 to 0.61 ns, against a pick uncertainty of
+   0.8 ns. pyGIMLi and the published Bayesian posterior confirm the structure
+   independently.
+
+Synthetic examples
+------------------
+
+These three come from ``doc/make_figures.py`` and rebuild in one command.
+
+Cone-beam FDK
+~~~~~~~~~~~~~
+
+A 192\ :sup:`3` phantom, 720 views, one call.
 
 .. figure:: _static/gallery_cone.png
 
-   Three orthogonal slices of the reconstructed volume.
+   Three orthogonal slices.
 
 .. code-block:: python
 
@@ -60,11 +113,10 @@ A 192\ :sup:`3` phantom, 720 views, reconstructed by FDK in one call.
    rec = xtk.fbp_cone(rays, knot, y, sod=sod, sdd=sdd, window="shepp-logan")
 
 Fitting the geometry
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 The scan below has an unknown detector shift. Gradient descent on the ray
-positions recovers it to four decimals. The left panel assumes no shift. The
-middle one uses the fitted value.
+positions recovers it to four decimals.
 
 .. figure:: _static/gallery_calibration.png
 
@@ -84,10 +136,10 @@ middle one uses the fitted value.
        s -= lr * float(dr.sum(resid * (Float(ux)*gx + Float(uy)*gy)).item())
 
 Few views
----------
+~~~~~~~~~
 
-Twenty projections. Filtered backprojection streaks. Conjugate gradients on
-the same rays does better, because it fits the data instead of inverting an
+Twenty projections. Filtered backprojection streaks. Conjugate gradients on the
+same rays does better, because it fits the data instead of inverting an
 incomplete integral.
 
 .. figure:: _static/gallery_sparse.png
@@ -105,7 +157,7 @@ incomplete integral.
               lambda v: xtk.xrt_adjoint(re, knot, 0, v), y, N*N, n_iter=40)
 
 Basis functions
----------------
+~~~~~~~~~~~~~~~
 
 The support of the box spline and its projections.
 

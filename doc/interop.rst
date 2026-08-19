@@ -47,6 +47,15 @@ compare.
    :py:func:`~xrt_toolkit.parallel_beam` scan to 7e-4 on a peak line integral
    of 104.
 
+.. tip::
+
+   Real archives carry conventions the geometry file does not state. In the
+   Walnut collection of Der Sarkissian and co-workers, each frame is stored
+   transposed and flipped, so ``np.transpose(np.flipud(image))`` gives the
+   ``(v, u)`` order the geometry expects, and the projections pair with the
+   geometry rows in reverse order. Get either wrong and the reconstruction
+   comes out as concentric rings, with no other clue.
+
 PyTorch
 -------
 
