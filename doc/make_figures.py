@@ -205,6 +205,75 @@ def gallery_calibration():
     print(f"   fitted shift {s:.4f} (true {true_shift})")
 
 
+def gallery_walnut():
+    """Real data: the public Walnut1 cone-beam scan, read through from_astra.
+
+    The dataset is not part of this repository. Download Walnut1 from
+    https://doi.org/10.5281/zenodo.2686726 and point WALNUT at it.
+    """
+    import glob
+    import tifffile as tf
+
+    WALNUT = pathlib.Path(__file__).resolve().parent.parent / \
+        "src/calibration_data/Walnut1/Projections"
+    if not WALNUT.is_dir():
+        print("skipping gallery_walnut: Walnut1 not found")
+        return
+
+    STEP, BIN = 6, 2
+    vox_mm = 0.1496 * BIN / 3.015181           # detector pitch / magnification
+    # the scanner writes each frame transposed and flipped, and pairs the
+    # projections with the geometry rows in reverse order
+    trafo = lambda im: np.transpose(np.flipud(im))
+
+    Ls, Gs = [], []
+    for tube in ("tubeV1", "tubeV2", "tubeV3"):
+        W = WALNUT / tube
+        dark = trafo(tf.imread(str(W / "di000000.tif"))).astype(np.float32)
+        flat = np.mean([trafo(tf.imread(str(W / f"io00000{i}.tif"))).astype(np.float32)
+                        for i in (0, 1)], 0)
+        files = sorted(glob.glob(str(W / "scan_*.tif")))[::-1][::STEP]
+        g = np.loadtxt(str(W / "scan_geom_corrected.geom"))[::STEP]
+        n = min(len(files), len(g))
+        P = np.stack([trafo(tf.imread(f)).astype(np.float32) for f in files[:n]])
+        L = -np.log(np.clip((P - dark) / np.maximum(flat - dark, 1.0), 1e-4, 1.0))
+        Ls.append(L.reshape(len(L), 972 // BIN, BIN, 768 // BIN, BIN).mean((2, 4)))
+        g = g[:n]
+        g[:, 0:6] /= vox_mm                    # positions  -> voxel units
+        g[:, 6:12] *= BIN / vox_mm             # detector axes -> voxel units
+        Gs.append(g)
+
+    L = np.concatenate(Ls)
+    g = np.concatenate(Gs)
+    n_view, n_v, n_u = L.shape
+    Nw = 500
+    rays, ks = xtk.from_astra(
+        {"type": "cone_vec", "DetectorRowCount": n_v,
+         "DetectorColCount": n_u, "Vectors": g},
+        {"GridColCount": Nw, "GridRowCount": Nw, "GridSliceCount": Nw,
+         "option": {"WindowMinX": -Nw/2, "WindowMaxX": Nw/2,
+                    "WindowMinY": -Nw/2, "WindowMaxY": Nw/2,
+                    "WindowMinZ": -Nw/2, "WindowMaxZ": Nw/2}})
+    # from_astra orders 3-D rays as (det_v, angles, det_u)
+    y = Float(np.ascontiguousarray(np.transpose(L, (1, 0, 2)).reshape(-1)))
+    del L
+    rec = xtk.cg(lambda v: xtk.xrt_apply(rays, ks, 0, v),
+                 lambda v: xtk.xrt_adjoint(rays, ks, 0, v), y, Nw ** 3, n_iter=30)
+    r = np.asarray(rec).reshape(Nw, Nw, Nw)
+
+    fig, axs = plt.subplots(1, 3, figsize=(12, 4.2))
+    hi = np.percentile(r, 99.8)
+    for ax, (sl, ti) in zip(axs, ((r[:, :, Nw//2], "axial"),
+                                  (r[:, Nw//2, :], "coronal"),
+                                  (r[Nw//2, :, :], "sagittal"))):
+        ax.imshow(sl.T, cmap="gray", vmin=0, vmax=hi)
+        ax.set_title(ti)
+        ax.set_xticks([]); ax.set_yticks([])
+    plt.tight_layout()
+    save(fig, "gallery_walnut.png")
+    print(f"   {n_view} views, {dr.width(rays[0])/1e6:.0f}M rays")
+
+
 if __name__ == "__main__":
     geometries()
     bases()
@@ -212,3 +281,4 @@ if __name__ == "__main__":
     gallery_cone()
     gallery_sparse()
     gallery_calibration()
+    gallery_walnut()

@@ -1,8 +1,44 @@
 Gallery
 =======
 
-Every figure comes from ``doc/make_figures.py``, which runs the library on a
-synthetic phantom. Rebuild them with one command.
+Every figure comes from ``doc/make_figures.py``. Rebuild them with one
+command. The first uses public measured data; the rest use a synthetic
+phantom.
+
+A real scan
+-----------
+
+Walnut 1 of the public cone-beam collection of Der Sarkissian and co-workers
+[dersarkissian2019]_: 3 x 1200 projections on a 972 x 768 detector, three
+source heights, 100 um voxels. The dataset ships an ASTRA ``cone_vec``
+geometry file, so :py:func:`~xrt_toolkit.from_astra` reads it as it stands.
+
+.. figure:: _static/gallery_walnut.png
+
+   603 of the 3603 projections, 113 M rays, reconstructed on a 500\ :sup:`3`
+   grid by 30 conjugate-gradient iterations.
+
+.. code-block:: python
+
+   g = np.loadtxt("scan_geom_corrected.geom")     # ASTRA cone_vec, 12 columns
+   g[:, 0:6] /= voxel_mm                          # positions -> voxel units
+   g[:, 6:12] *= bin / voxel_mm                   # detector axes -> voxel units
+
+   rays, knot = xtk.from_astra(
+       {"type": "cone_vec", "DetectorRowCount": n_v,
+        "DetectorColCount": n_u, "Vectors": g}, vol_geom)
+
+   y = Float(np.transpose(L, (1, 0, 2)).reshape(-1))   # (det_v, angles, det_u)
+   rec = xtk.cg(lambda v: xtk.xrt_apply(rays, knot, 0, v),
+                lambda v: xtk.xrt_adjoint(rays, knot, 0, v), y, N**3, n_iter=30)
+
+.. note::
+
+   Two conventions of this dataset are easy to miss. Each frame is stored
+   transposed and flipped, so ``np.transpose(np.flipud(image))`` gives the
+   ``(v, u)`` order the geometry expects. And the projections pair with the
+   geometry rows in reverse order. Get either wrong and the reconstruction
+   comes out as concentric rings.
 
 Cone-beam CT
 ------------

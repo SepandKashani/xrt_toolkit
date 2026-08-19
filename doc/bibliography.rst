@@ -42,6 +42,14 @@ Other packages
    MATLAB-GPU toolbox for CBCT image reconstruction*. Biomedical Physics and
    Engineering Express, 2(5), 2016.
 
+Datasets
+--------
+
+.. [dersarkissian2019] H. Der Sarkissian, F. Lucka, M. van Eijnatten,
+   G. Colacicco, S. B. Coban and K. J. Batenburg. *A cone-beam X-ray computed
+   tomography data collection designed for machine learning*. Scientific Data,
+   6:215, 2019. The Walnut scans used in the :doc:`gallery`.
+
 Tensor tomography
 -----------------
 
