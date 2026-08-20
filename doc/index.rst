@@ -111,6 +111,7 @@ scan geometry as well as the image.
    :hidden:
 
    gallery
+   cheatsheet
    transform
    geometry
    interop
@@ -186,5 +187,6 @@ against ``0.0176``. It keeps improving from there, reaching ``0.0101`` at 60 and
 equations amplify it; stopping early, not iterating longer, is what keeps CG
 usable then. :doc:`pitfalls` covers when to reach for which.
 
-Read :doc:`transform` for what the operators compute. Or open the
+Every convention on one page is in the :doc:`cheatsheet`. Read
+:doc:`transform` for what the operators compute, or open the
 :doc:`tutorials`.

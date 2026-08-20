@@ -5,206 +5,213 @@ Real data
 ---------
 
 Every reconstruction here comes from measured data in a public archive. The
-scripts are in ``xtk_experiments/realdata``.
+scripts are in ``xtk_experiments/realdata``. Pick a panel.
 
-Cryo-electron tomography
-~~~~~~~~~~~~~~~~~~~~~~~~
+.. tab-set::
 
-A whole *Vibrio cholerae* cell, CZ CryoET Data Portal dataset 10489
-[czi10489]_. 41 tilts from -53 to +67 degrees, 1023 x 1440, 13.3 A per pixel.
+   .. tab-item:: Cryo-ET
 
-.. figure:: _static/real_cryoet_vibrio.png
-   :width: 64%
+      A whole *Vibrio cholerae* cell, CZ CryoET Data Portal dataset 10489
+      [czi10489]_. 41 tilts from -53 to +67 degrees, 1023 x 1440, 13.3 A per
+      pixel.
 
-   The cell envelope, both polyphosphate granules and the appendage, with
-   ribosome-scale texture in the cytoplasm. One second.
+      .. figure:: _static/real_cryoet_vibrio.png
+         :width: 78%
 
-A single-axis tilt series is a parallel-beam scan, so the whole reconstruction
-is two calls: :py:func:`~xrt_toolkit.parallel_beam` for the geometry and
-:py:func:`~xrt_toolkit.fbp` to filter and backproject.
+         The cell envelope, both polyphosphate granules and the appendage,
+         with ribosome-scale texture in the cytoplasm. One second.
 
-.. code-block:: python
+      A single-axis tilt series is a parallel-beam scan, so the whole
+      reconstruction is two calls: :py:func:`~xrt_toolkit.parallel_beam` for
+      the geometry and :py:func:`~xrt_toolkit.fbp` to filter and backproject.
 
-   import numpy as np, drjit as dr
-   from drjit.cuda.ad import Float
-   import xrt_toolkit as xtk
+      .. code-block:: python
 
-   # g: (n_tilt, NV, NU) tilt images, NV along the tilt axis
-   px = 2.666                                   # nm per binned voxel
+         import numpy as np, drjit as dr
+         from drjit.cuda.ad import Float
+         import xrt_toolkit as xtk
 
-   # parallel_beam rotates about the third lattice axis, and its first detector
-   # axis spans the second. Put the tilt axis on axis 3, and the thin specimen
-   # direction on axis 1, where the beam points at zero tilt.
-   knot = xtk.UniformSpec.centered(step=px, num=(NZ, NU, NV))
-   det = xtk.DetectorSpec(size=(NU * px, NV * px), num_cell=(NU, NV))
-   rays = xtk.parallel_beam(Float(np.deg2rad(tilt_angles)), det)
+         # g: (n_tilt, NV, NU) tilt images, NV along the tilt axis
+         px = 2.666                                   # nm per binned voxel
 
-   y = Float(np.transpose(g, (0, 2, 1)).ravel())      # (tilt, u1, u2)
-   vol = xtk.fbp(rays, knot, y, window="shepp-logan")
+         # parallel_beam rotates about the third lattice axis, and its first
+         # detector axis spans the second. Put the tilt axis on axis 3, and the
+         # thin specimen direction on axis 1, where the beam points at zero tilt.
+         knot = xtk.UniformSpec.centered(step=px, num=(NZ, NU, NV))
+         det = xtk.DetectorSpec(size=(NU * px, NV * px), num_cell=(NU, NV))
+         rays = xtk.parallel_beam(Float(np.deg2rad(tilt_angles)), det)
 
-.. note::
+         y = Float(np.transpose(g, (0, 2, 1)).ravel())      # (tilt, u1, u2)
+         vol = xtk.fbp(rays, knot, y, window="shepp-logan")
 
-   ``fbp`` beats an iterative solve here. Twenty-five CGLS iterations recover
-   the same features but leave a low-frequency gradient across the field, and
-   they cost five seconds against one. CG on the normal equations does worse
-   still: it breaks down in single precision on this problem within a few
-   iterations, so use CGLS if you do want to iterate.
+      .. note::
 
-Cone-beam CT
-~~~~~~~~~~~~
+         ``fbp`` beats an iterative solve here. Twenty-five CGLS iterations
+         recover the same features but leave a low-frequency gradient across
+         the field, and they cost five seconds against one. CG on the normal
+         equations does worse still: it breaks down in single precision on this
+         problem within a few iterations, so use CGLS if you do want to
+         iterate.
 
-Walnut 1 of the collection of Der Sarkissian and co-workers
-[dersarkissian2019]_. The dataset ships an ASTRA [vanaarle2016]_
-``cone_vec`` geometry file, so :py:func:`~xrt_toolkit.from_astra` reads it
-as it stands.
+   .. tab-item:: Cone-beam CT
 
-.. figure:: _static/real_ct_walnut_conebeam.png
+      Walnut 1 of the collection of Der Sarkissian and co-workers
+      [dersarkissian2019]_. The dataset ships an ASTRA [vanaarle2016]_
+      ``cone_vec`` geometry file, so :py:func:`~xrt_toolkit.from_astra` reads
+      it as it stands.
 
-   603 projections, 113 M rays, a 500\ :sup:`3` reconstruction by 30
-   conjugate-gradient iterations. Shell, kernel and septum resolve.
+      .. figure:: _static/real_ct_walnut_conebeam.png
 
-.. code-block:: python
+         603 projections, 113 M rays, a 500\ :sup:`3` reconstruction by 30
+         conjugate-gradient iterations. Shell, kernel and septum resolve.
 
-   g = np.loadtxt("scan_geom_corrected.geom")     # ASTRA cone_vec, 12 columns
-   g[:, 0:6] /= voxel_mm                          # positions    -> voxel units
-   g[:, 6:12] *= bin / voxel_mm                   # detector axes -> voxel units
+      .. code-block:: python
 
-   rays, knot = xtk.from_astra(
-       {"type": "cone_vec", "DetectorRowCount": n_v,
-        "DetectorColCount": n_u, "Vectors": g}, vol_geom)
+         g = np.loadtxt("scan_geom_corrected.geom")     # ASTRA cone_vec, 12 cols
+         g[:, 0:6] /= voxel_mm                          # positions -> voxel units
+         g[:, 6:12] *= bin / voxel_mm                   # det axes  -> voxel units
 
-   y = Float(np.transpose(L, (1, 0, 2)).reshape(-1))   # (det_v, angles, det_u)
-   rec = xtk.cg(lambda v: xtk.xrt_apply(rays, knot, 0, v),
-                lambda v: xtk.xrt_adjoint(rays, knot, 0, v), y, N**3, n_iter=30)
+         rays, knot = xtk.from_astra(
+             {"type": "cone_vec", "DetectorRowCount": n_v,
+              "DetectorColCount": n_u, "Vectors": g}, vol_geom)
 
-Tensor tomography
-~~~~~~~~~~~~~~~~~
+         y = Float(np.transpose(L, (1, 0, 2)).reshape(-1))  # (det_v, ang, det_u)
+         rec = xtk.cg(lambda v: xtk.xrt_apply(rays, knot, 0, v),
+                      lambda v: xtk.xrt_adjoint(rays, knot, 0, v),
+                      y, N**3, n_iter=30)
 
-Small-angle scattering tensor tomography of trabecular bone, Zenodo 10074598
-[saxstt_bone]_. Every voxel carries a full scattering distribution rather than
-one number, and the fused operator pushes all its spherical-harmonic channels
-through a single lattice traversal.
+   .. tab-item:: Tensor tomography
 
-.. figure:: _static/real_tensor_orientation.png
-   :width: 58%
+      Small-angle scattering tensor tomography of trabecular bone, Zenodo
+      10074598 [saxstt_bone]_. Every voxel carries a full scattering
+      distribution rather than one number, and the fused operator pushes all
+      its spherical-harmonic channels through a single lattice traversal.
 
-   The fitted mineral orientation inside a bone strut. Each segment is the
-   fibre axis of one voxel, coloured by how strongly that voxel scatters. The
-   fibres run along the strut and fan out where it branches.
+      .. figure:: _static/real_tensor_orientation.png
+         :width: 72%
 
-.. code-block:: python
+         The fitted mineral orientation inside a bone strut. Each segment is
+         the fibre axis of one voxel, coloured by how strongly that voxel
+         scatters. The fibres run along the strut and fan out where it
+         branches.
 
-   w = xtk.lrt_weights(ray_n)                 # (L, C) contraction weights
-   y = xtk.xrt_tensor_apply(rays, knot, order, f, w)     # all C channels, one pass
-   b = xtk.xrt_tensor_adjoint(rays, knot, order, r, w)
+      .. code-block:: python
 
-The tensor model predicts held-out projections with R\ :sup:`2` = 0.964,
-against 0.846 for an isotropic model.
+         w = xtk.lrt_weights(ray_n)              # (L, C) contraction weights
+         y = xtk.xrt_tensor_apply(rays, knot, order, f, w)   # all C, one pass
+         b = xtk.xrt_tensor_adjoint(rays, knot, order, r, w)
 
-TOF-PET
-~~~~~~~
+      The tensor model predicts held-out projections with R\ :sup:`2` = 0.964,
+      against 0.846 for an isotropic model.
 
-Real time-of-flight lines of response from the PETRIC ``GE_DMI4_NEMA_IQ``
-dataset [petric]_, a GE Discovery MI 4-ring scanner. 33.7 M lines of response,
-each an explicit ray with its own time-of-flight offset.
+   .. tab-item:: TOF-PET
 
-.. figure:: _static/real_pet_tof_nema.png
+      Real time-of-flight lines of response from the PETRIC
+      ``GE_DMI4_NEMA_IQ`` dataset [petric]_, a GE Discovery MI 4-ring scanner.
+      33.7 M lines of response, each an explicit ray with its own
+      time-of-flight offset.
 
-   The NEMA phantom outline, the hot spheres and the cold insert.
+      .. figure:: _static/real_pet_tof_nema.png
 
-This panel is softer than a clinical reconstruction of the same phantom, and
-the reason is counts rather than the operator. The extracted subset is one
-segment of 205 and every fourth view, which leaves 0.53 prompt counts per
-support voxel: fewer counts than unknowns. Unregularised MLEM on that is
-Poisson-dominated, so it needs a post-filter, and the post-filter is what costs
-the resolution.
+         The NEMA phantom outline, the hot spheres and the cold insert.
 
-.. code-block:: python
+      This panel is softer than a clinical reconstruction of the same phantom,
+      and the reason is counts rather than the operator. The extracted subset
+      is one segment of 205 and every fourth view, which leaves 0.53 prompt
+      counts per support voxel: fewer counts than unknowns. Unregularised MLEM
+      on that is Poisson-dominated, so it needs a post-filter, and the
+      post-filter is what costs the resolution.
 
-   # every LOR is a ray; TOF localises the emission along it
-   rays = (Array3f(*end1.T), Array3f(*(end2 - end1).T))
-   tof = xtk.TOFSpec(center=offset_mm, sigma=sigma_mm)
-   y = xtk.xrt_apply(rays, knot, 0, f, tof=tof)
+      .. code-block:: python
+
+         # every LOR is a ray; TOF localises the emission along it
+         rays = (Array3f(*end1.T), Array3f(*(end2 - end1).T))
+         tof = xtk.TOFSpec(center=offset_mm, sigma=sigma_mm)
+         y = xtk.xrt_apply(rays, knot, 0, f, tof=tof)
 
 Synthetic examples
 ------------------
 
 These come from ``doc/make_figures.py`` and rebuild in one command.
 
-Cone-beam FDK
-~~~~~~~~~~~~~
+.. tab-set::
 
-.. figure:: _static/gallery_cone.png
+   .. tab-item:: Cone-beam FDK
 
-   A 192\ :sup:`3` phantom, 720 views, three orthogonal slices.
+      .. figure:: _static/gallery_cone.png
 
-.. code-block:: python
+         A 192\ :sup:`3` phantom, 720 views, three orthogonal slices.
 
-   sod, sdd = 8.0 * N, 10.0 * N
-   rays = xtk.cone_beam(sod=sod, sdd=sdd,
-                        angles=dr.linspace(Float, 0, 2*np.pi, 720, endpoint=False),
-                        detector_spec=xtk.DetectorSpec(size=(1.6*N, 1.6*N),
-                                                       num_cell=(384, 384)))
-   y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0, Float(phantom.reshape(-1)))
-   rec = xtk.fbp_cone(rays, knot, y, sod=sod, sdd=sdd, window="shepp-logan")
+      .. code-block:: python
 
-Fitting the geometry
-~~~~~~~~~~~~~~~~~~~~
+         sod, sdd = 8.0 * N, 10.0 * N
+         rays = xtk.cone_beam(
+             sod=sod, sdd=sdd,
+             angles=dr.linspace(Float, 0, 2*np.pi, 720, endpoint=False),
+             detector_spec=xtk.DetectorSpec(size=(1.6*N, 1.6*N),
+                                            num_cell=(384, 384)))
+         y = xtk.xrt_apply(xtk.struct_rays(rays), knot, 0,
+                           Float(phantom.reshape(-1)))
+         rec = xtk.fbp_cone(rays, knot, y, sod=sod, sdd=sdd,
+                            window="shepp-logan")
 
-.. figure:: _static/gallery_calibration.png
+   .. tab-item:: Fitting the geometry
 
-   An unknown detector shift, recovered by gradient descent. True 1.5 voxels,
-   fitted 1.5000.
+      .. figure:: _static/gallery_calibration.png
 
-.. code-block:: python
+         An unknown detector shift, recovered by gradient descent. True 1.5
+         voxels, fitted 1.5000.
 
-   def rays_at(s):                      # slide the detector along its own axis
-       return (Array2f(t0[0] + s*ux, t0[1] + s*uy), Array2f(n0))
+      .. code-block:: python
 
-   s, lr = 0.0, 2e-6
-   for _ in range(40):
-       rays = rays_at(s)
-       resid = xtk.xrt_apply(rays, knot, 1, f) - y_meas
-       gx = xtk.xrt_ad_t_x(rays, knot, 1, f)     # d(Af) / d t_x
-       gy = xtk.xrt_ad_t_y(rays, knot, 1, f)     # d(Af) / d t_y
-       s -= lr * float(dr.sum(resid * (Float(ux)*gx + Float(uy)*gy)).item())
+         def rays_at(s):                 # slide the detector along its own axis
+             return (Array2f(t0[0] + s*ux, t0[1] + s*uy), Array2f(n0))
 
-Few views
-~~~~~~~~~
+         s, lr = 0.0, 2e-6
+         for _ in range(40):
+             rays = rays_at(s)
+             resid = xtk.xrt_apply(rays, knot, 1, f) - y_meas
+             gx = xtk.xrt_ad_t_x(rays, knot, 1, f)     # d(Af) / d t_x
+             gy = xtk.xrt_ad_t_y(rays, knot, 1, f)     # d(Af) / d t_y
+             s -= lr * float(dr.sum(resid * (Float(ux)*gx + Float(uy)*gy)).item())
 
-.. figure:: _static/gallery_sparse.png
+   .. tab-item:: Few views
 
-   Twenty projections. Phantom, ``fbp`` with a Hann window, and ``cg`` after
-   40 iterations.
+      .. figure:: _static/gallery_sparse.png
 
-.. code-block:: python
+         Twenty projections. Phantom, ``fbp`` with a Hann window, and ``cg``
+         after 40 iterations.
 
-   rays = xtk.parallel_beam(dr.linspace(Float, 0, np.pi, 20, endpoint=False), det)
-   re = xtk.struct_rays(rays)
-   y = xtk.xrt_apply(re, knot, 0, f)
+      .. code-block:: python
 
-   a = xtk.fbp(rays, knot, y, window="hann")
-   b = xtk.cg(lambda v: xtk.xrt_apply(re, knot, 0, v),
-              lambda v: xtk.xrt_adjoint(re, knot, 0, v), y, N*N, n_iter=40)
+         rays = xtk.parallel_beam(
+             dr.linspace(Float, 0, np.pi, 20, endpoint=False), det)
+         re = xtk.struct_rays(rays)
+         y = xtk.xrt_apply(re, knot, 0, f)
 
-Basis functions
-~~~~~~~~~~~~~~~
+         a = xtk.fbp(rays, knot, y, window="hann")
+         b = xtk.cg(lambda v: xtk.xrt_apply(re, knot, 0, v),
+                    lambda v: xtk.xrt_adjoint(re, knot, 0, v),
+                    y, N*N, n_iter=40)
 
-.. list-table::
-   :widths: 33 33 33
+   .. tab-item:: Basis functions
 
-   * - .. figure:: _static/basis_0.png
+      .. list-table::
+         :widths: 33 33 33
 
-          order 0
-     - .. figure:: _static/basis_1.png
+         * - .. figure:: _static/basis_0.png
 
-          order 1
-     - .. figure:: _static/basis_2.png
+                order 0
+           - .. figure:: _static/basis_1.png
 
-          order 2
+                order 1
+           - .. figure:: _static/basis_2.png
 
-.. code-block:: python
+                order 2
 
-   ang = np.linspace(0, np.pi, 5, endpoint=False)
-   ray_n = Array2f(np.cos(ang, dtype=np.float32), np.sin(ang, dtype=np.float32))
-   fig = xtk.plot_2d_basis(knot, order, ray_n)
+      .. code-block:: python
+
+         ang = np.linspace(0, np.pi, 5, endpoint=False)
+         ray_n = Array2f(np.cos(ang, dtype=np.float32),
+                         np.sin(ang, dtype=np.float32))
+         fig = xtk.plot_2d_basis(knot, order, ray_n)
