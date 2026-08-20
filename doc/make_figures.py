@@ -423,6 +423,37 @@ def geometry_schematics():
     save(fig, "schem_explicit.svg")
 
 
+def first_steps():
+    """Exactly what the front-page First steps snippet draws."""
+    N = 128
+    yy, xx = np.mgrid[:N, :N] - (N - 1) / 2
+    image = ((xx**2 + yy**2) < (0.38 * N) ** 2).astype(np.float32)
+    image[(xx + 18) ** 2 + (yy - 12) ** 2 < 11**2] = 0.3
+
+    k = xtk.UniformSpec.centered(step=1.0, num=(N, N))
+    det = xtk.DetectorSpec(size=(1.5 * N,), num_cell=(192,))
+    rays = xtk.parallel_beam(dr.linspace(Float, 0, np.pi, 180, endpoint=False), det)
+
+    sino = xtk.xrt_struct_apply(rays, k, 0, Float(image.ravel()))
+    fbp = np.asarray(xtk.fbp(rays, k, sino)).reshape(N, N)
+    re = xtk.struct_rays(rays)
+    cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, k, 0, v),
+                           lambda v: xtk.xrt_adjoint(re, k, 0, v),
+                           sino, N * N, n_iter=30)).reshape(N, N)
+    print(f"  fbp {abs(fbp - image).mean():.4f}  cg {abs(cg - image).mean():.4f}")
+
+    fig, ax = plt.subplots(1, 4, figsize=(12, 3.2))
+    ax[0].imshow(image, cmap="gray", vmin=0, vmax=1)
+    ax[1].imshow(np.asarray(sino).reshape(180, 192), cmap="gray")
+    ax[2].imshow(fbp, cmap="gray", vmin=0, vmax=1)
+    ax[3].imshow(cg, cmap="gray", vmin=0, vmax=1)
+    for a, t in zip(ax, ("phantom", "sinogram", "fbp", "cg, 30 iterations")):
+        a.set_title(t, fontsize=10.5)
+        a.set_axis_off()
+    plt.tight_layout()
+    save(fig, "first_steps.png")
+
+
 def bases():
     """Box-spline basis of each order and its projection."""
     ang = np.linspace(0, np.pi, 5, endpoint=False)
@@ -654,6 +685,7 @@ def gallery_walnut():
 if __name__ == "__main__":
     lattice_figure()
     detector_spec_figure()
+    first_steps()
     geometry_schematics()
     geometry_schematics_3d()
     bases()

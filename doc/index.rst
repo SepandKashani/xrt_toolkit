@@ -173,13 +173,20 @@ Matplotlib.
 
    import matplotlib.pyplot as plt
    fig, ax = plt.subplots(1, 4, figsize=(12, 3.2))
-   for a, im, t in zip(ax, (image, np.asarray(sino).reshape(180, 192), fbp, cg),
-                       ("phantom", "sinogram", "fbp", "cg, 30 iterations")):
-       a.imshow(im, cmap="gray"); a.set_title(t); a.set_axis_off()
+   ax[0].imshow(image, cmap="gray", vmin=0, vmax=1)
+   ax[1].imshow(np.asarray(sino).reshape(180, 192), cmap="gray")
+   ax[2].imshow(fbp, cmap="gray", vmin=0, vmax=1)
+   ax[3].imshow(cg, cmap="gray", vmin=0, vmax=1)
+   for a, title in zip(ax, ("phantom", "sinogram", "fbp", "cg, 30 iterations")):
+       a.set_title(title); a.set_axis_off()
    plt.show()
 
-It prints ``sinogram 34560 samples, reconstruction (128, 128)``, then draws the
-phantom, its sinogram and the two reconstructions side by side.
+It prints ``sinogram 34560 samples, reconstruction (128, 128)`` and draws this.
+
+.. figure:: _static/first_steps.png
+
+   The phantom, its sinogram, and the same data back through both routes. On a
+   shared grey scale, ``fbp`` softens the edges while CG holds them.
 
 Thirty iterations is where CG passes ``fbp`` on data this clean: ``0.0160``
 against ``0.0176``. It keeps improving from there, reaching ``0.0101`` at 60 and
