@@ -30,17 +30,17 @@ XRT Toolkit
          rays = xtk.parallel_beam(
              dr.linspace(Float, 0, np.pi, 512, endpoint=False), det)
 
-         sino = xtk.xrt_struct_apply(rays, knot, 1, Float(img.ravel()))
+         sino = xtk.xrt_struct_apply(rays, knot, 0, Float(img.ravel()))
          fbp = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
 
          re = xtk.struct_rays(rays)               # expand once, then iterate
-         cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 1, v),
-                                lambda v: xtk.xrt_adjoint(re, knot, 1, v),
-                                sino, N * N, n_iter=15)).reshape(N, N)
+         cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 0, v),
+                                lambda v: xtk.xrt_adjoint(re, knot, 0, v),
+                                sino, N * N, n_iter=30)).reshape(N, N)
 
          print(round(float(abs(fbp - img).mean()), 4),
                round(float(abs(cg - img).mean()), 4))
-         # 0.0023 0.0044
+         # 0.0022 0.0036
 
    .. grid-item::
       :columns: 12 12 4 4
@@ -155,16 +155,16 @@ Matplotlib.
    angles = dr.linspace(Float, 0, np.pi, 180, endpoint=False)
    rays = xtk.parallel_beam(angles, det)
 
-   # Forward projection.
-   sino = xtk.xrt_struct_apply(rays, knot, 1, Float(image.ravel()))
+   # Forward projection. Order 0 means voxels, so a matrix entry is a chord length.
+   sino = xtk.xrt_struct_apply(rays, knot, 0, Float(image.ravel()))
 
-   # Two ways back: filtered backprojection, and 15 iterations of CG.
+   # Two ways back: filtered backprojection, and 30 iterations of CG.
    fbp = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
 
    re = xtk.struct_rays(rays)          # expand once; the solver calls A many times
-   cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 1, v),
-                          lambda v: xtk.xrt_adjoint(re, knot, 1, v),
-                          sino, N * N, n_iter=15)).reshape(N, N)
+   cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 0, v),
+                          lambda v: xtk.xrt_adjoint(re, knot, 0, v),
+                          sino, N * N, n_iter=30)).reshape(N, N)
 
    print(f"sinogram {len(sino)} samples, reconstruction {fbp.shape}")
    print(f"mean absolute error   fbp {np.abs(fbp - image).mean():.4f}"
@@ -173,18 +173,18 @@ Matplotlib.
    import matplotlib.pyplot as plt
    fig, ax = plt.subplots(1, 4, figsize=(12, 3.2))
    for a, im, t in zip(ax, (image, np.asarray(sino).reshape(180, 192), fbp, cg),
-                       ("phantom", "sinogram", "fbp", "cg, 15 iterations")):
+                       ("phantom", "sinogram", "fbp", "cg, 30 iterations")):
        a.imshow(im, cmap="gray"); a.set_title(t); a.set_axis_off()
    plt.show()
 
-It prints ``sinogram 34560 samples, reconstruction (128, 128)`` and a mean
-absolute error near ``0.0170`` for both, then draws the phantom, its sinogram
-and the two reconstructions side by side.
+It prints ``sinogram 34560 samples, reconstruction (128, 128)``, then draws the
+phantom, its sinogram and the two reconstructions side by side.
 
-Fifteen iterations is roughly where CG catches up with ``fbp`` on data this
-clean; it keeps improving past that, reaching ``0.0116`` by 120. On noisy or
-incomplete data the picture reverses, and stopping early is what keeps CG
-usable. :doc:`pitfalls` covers when to reach for which.
+Thirty iterations is where CG passes ``fbp`` on data this clean: ``0.0160``
+against ``0.0176``. It keeps improving from there, reaching ``0.0101`` at 60 and
+``0.0047`` at 120. Add noise and the ordering flips, because the normal
+equations amplify it; stopping early, not iterating longer, is what keeps CG
+usable then. :doc:`pitfalls` covers when to reach for which.
 
 Read :doc:`transform` for what the operators compute. Or open the
 :doc:`tutorials`.
