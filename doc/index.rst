@@ -67,6 +67,50 @@ XRT Toolkit
 
          Source
 
+.. grid:: 2 2 4 4
+   :gutter: 3
+   :class-container: xtk-stats
+
+   .. grid-item::
+
+      .. rst-class:: xtk-stat-n
+
+         3.4 s
+
+      .. rst-class:: xtk-stat-l
+
+         640 x 640 x 836 cone-beam volume, 800 views
+
+   .. grid-item::
+
+      .. rst-class:: xtk-stat-n
+
+         425 M
+
+      .. rst-class:: xtk-stat-l
+
+         rays projected in 0.7 s
+
+   .. grid-item::
+
+      .. rst-class:: xtk-stat-n
+
+         100x
+
+      .. rst-class:: xtk-stat-l
+
+         faster per iteration after ``struct_rays``
+
+   .. grid-item::
+
+      .. rst-class:: xtk-stat-n
+
+         6
+
+      .. rst-class:: xtk-stat-l
+
+         geometry derivatives: **t** and **n**, every axis
+
 Both directions work in 2-D and 3-D, on box-spline bases, so you can fit the
 scan geometry as well as the image.
 
@@ -97,7 +141,7 @@ scan geometry as well as the image.
       :link-type: doc
 
       ``fbp``, ``fbp_cone``, ``bpf``, ``cg`` and ``gd``. Filtering runs on the
-      GPU. A 640\ :sup:`3` cone-beam volume takes 3.4 s.
+      GPU. A 640 x 640 x 836 cone-beam volume takes 3.4 s.
 
    .. grid-item-card:: Beyond attenuation
       :link: api

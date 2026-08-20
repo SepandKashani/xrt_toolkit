@@ -127,3 +127,60 @@ p.xtk-lead {
 .xtk-hero { margin: 1.4rem 0 2.4rem; }
 .xtk-hero .sd-btn { font-weight: 550; }
 .xtk-hero div.highlight { margin: 0; }
+
+/* ------------------------------------------------------------- stat tiles
+   Four numbers the docs already stand behind, ruled in the brand colour. */
+.xtk-stats { margin: 1.7rem 0 2.3rem; }
+.xtk-stats .sd-col {
+  border-top: 2px solid var(--color-brand-primary);
+  padding-top: 0.55rem;
+}
+p.xtk-stat-n {
+  font-size: 1.85rem;
+  font-weight: 680;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-brand-primary);
+  margin: 0 0 0.15rem;
+}
+p.xtk-stat-l {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--color-foreground-secondary);
+  margin: 0;
+}
+
+/* --------------------------------------------------------- heading rhythm
+   A short accent under each section heading, not a full rule. */
+article h2::after {
+  content: "";
+  display: block;
+  width: 2.25rem;
+  height: 3px;
+  margin-top: 0.42rem;
+  border-radius: 2px;
+  background: var(--color-brand-primary);
+}
+
+/* ------------------------------------------------- cheat-sheet rules table
+   Tinted header, faint stripes, and the consequence column in red. */
+.xtk-rules th { background: rgba(14, 116, 144, 0.10); }
+.xtk-rules tbody tr:nth-child(2n) { background: rgba(14, 116, 144, 0.045); }
+.xtk-rules td:last-child { color: #b42318; }
+
+body[data-theme="dark"] .xtk-rules th { background: rgba(34, 211, 238, 0.14); }
+body[data-theme="dark"] .xtk-rules tbody tr:nth-child(2n) {
+  background: rgba(34, 211, 238, 0.06);
+}
+body[data-theme="dark"] .xtk-rules td:last-child { color: #fca5a5; }
+
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) .xtk-rules th {
+    background: rgba(34, 211, 238, 0.14);
+  }
+  body:not([data-theme="light"]) .xtk-rules tbody tr:nth-child(2n) {
+    background: rgba(34, 211, 238, 0.06);
+  }
+  body:not([data-theme="light"]) .xtk-rules td:last-child { color: #fca5a5; }
+}

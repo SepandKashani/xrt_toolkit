@@ -33,6 +33,7 @@ Rules
 .. list-table::
    :header-rows: 1
    :widths: 22 46 32
+   :class: xtk-rules
 
    * - Thing
      - Rule
