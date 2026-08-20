@@ -62,7 +62,8 @@ The detector
 
    det = xtk.DetectorSpec(size=(:xtku1:`12.0`,), num_cell=(:xtku1:`6`,))       # 2-D
 
-   rays = xtk.parallel_beam(angles, det)        # sinogram (len(angles), :xtku1:`6`, :xtku2:`4`)
+   rays = xtk.parallel_beam(angles, det)
+   # sinogram shape (len(angles), :xtku1:`6`, :xtku2:`4`)
 
 Three rules cover the rest.
 
@@ -91,6 +92,8 @@ Parallel beam
    .. grid-item::
 
       .. figure:: _static/schem_parallel_3d.svg
+         :width: 77%
+         :align: center
 
          The 3-D scan. The detector gains a second axis along the rotation
          axis; the rays stay parallel.
@@ -122,6 +125,8 @@ Cone beam
    .. grid-item::
 
       .. figure:: _static/schem_cone_3d.svg
+         :width: 82%
+         :align: center
 
          In 3-D the fan becomes a cone. Magnification is ``sdd / sod``, so the
          detector must be wider than the volume.
@@ -154,6 +159,8 @@ Arbitrary rays
    .. grid-item::
 
       .. figure:: _static/schem_explicit_3d.svg
+         :width: 79%
+         :align: center
 
          The same in 3-D, where each anchor and direction gains a third
          component. Label colours match the rays they name.

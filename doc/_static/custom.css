@@ -124,6 +124,6 @@ p.xtk-lead {
   color: var(--color-foreground-secondary);
   margin-top: 0.4rem;
 }
-.xtk-hero { margin: 1.6rem 0 2.4rem; }
-.xtk-hero .sd-btn { margin-bottom: 0.55rem; font-weight: 550; }
+.xtk-hero { margin: 1.4rem 0 2.4rem; }
+.xtk-hero .sd-btn { font-weight: 550; }
 .xtk-hero div.highlight { margin: 0; }

@@ -54,8 +54,9 @@ Cone-beam CT
 ~~~~~~~~~~~~
 
 Walnut 1 of the collection of Der Sarkissian and co-workers
-[dersarkissian2019]_. The dataset ships an ASTRA [vanaarle2016]_ ``cone_vec`` geometry file, so
-:py:func:`~xrt_toolkit.from_astra` reads it as it stands.
+[dersarkissian2019]_. The dataset ships an ASTRA [vanaarle2016]_
+``cone_vec`` geometry file, so :py:func:`~xrt_toolkit.from_astra` reads it
+as it stands.
 
 .. figure:: _static/real_ct_walnut_conebeam.png
 

@@ -8,42 +8,38 @@ XRT Toolkit
    apply the exact transpose, and differentiate with respect to the rays
    themselves.
 
-.. grid:: 1 1 2 2
-   :gutter: 3
+.. code-block:: python
+
+   import numpy as np, drjit as dr
+   from drjit.cuda.ad import Float
+   import xrt_toolkit as xtk
+
+   N = 512
+   img = np.zeros((N, N), np.float32)
+   img[128:384, 192:320] = 1.0                  # something to project
+
+   knot = xtk.UniformSpec.centered(step=1.0, num=(N, N))
+   det = xtk.DetectorSpec(size=(1.5 * N,), num_cell=(768,))
+   rays = xtk.parallel_beam(
+       dr.linspace(Float, 0, np.pi, 512, endpoint=False), det)
+
+   sino = xtk.xrt_struct_apply(rays, knot, 0, Float(img.ravel()))
+   fbp = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
+
+   re = xtk.struct_rays(rays)               # expand once, then iterate
+   cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 0, v),
+                          lambda v: xtk.xrt_adjoint(re, knot, 0, v),
+                          sino, N * N, n_iter=30)).reshape(N, N)
+
+   print(round(float(abs(fbp - img).mean()), 4),
+         round(float(abs(cg - img).mean()), 4))
+   # 0.0022 0.0036
+
+.. grid:: 1 3 3 3
+   :gutter: 2
    :class-container: xtk-hero
 
    .. grid-item::
-      :columns: 12 12 8 8
-
-      .. code-block:: python
-
-         import numpy as np, drjit as dr
-         from drjit.cuda.ad import Float
-         import xrt_toolkit as xtk
-
-         N = 512
-         img = np.zeros((N, N), np.float32)
-         img[128:384, 192:320] = 1.0                  # something to project
-
-         knot = xtk.UniformSpec.centered(step=1.0, num=(N, N))
-         det = xtk.DetectorSpec(size=(1.5 * N,), num_cell=(768,))
-         rays = xtk.parallel_beam(
-             dr.linspace(Float, 0, np.pi, 512, endpoint=False), det)
-
-         sino = xtk.xrt_struct_apply(rays, knot, 0, Float(img.ravel()))
-         fbp = np.asarray(xtk.fbp(rays, knot, sino)).reshape(N, N)
-
-         re = xtk.struct_rays(rays)               # expand once, then iterate
-         cg = np.asarray(xtk.cg(lambda v: xtk.xrt_apply(re, knot, 0, v),
-                                lambda v: xtk.xrt_adjoint(re, knot, 0, v),
-                                sino, N * N, n_iter=30)).reshape(N, N)
-
-         print(round(float(abs(fbp - img).mean()), 4),
-               round(float(abs(cg - img).mean()), 4))
-         # 0.0022 0.0036
-
-   .. grid-item::
-      :columns: 12 12 4 4
 
       .. button-ref:: gallery
          :ref-type: doc
@@ -52,6 +48,8 @@ XRT Toolkit
 
          Real-data gallery
 
+   .. grid-item::
+
       .. button-ref:: geometry
          :ref-type: doc
          :color: primary
@@ -59,6 +57,8 @@ XRT Toolkit
          :expand:
 
          Conventions
+
+   .. grid-item::
 
       .. button-link:: https://github.com/SepandKashani/xrt_toolkit
          :color: primary

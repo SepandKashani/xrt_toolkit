@@ -23,8 +23,10 @@ N = 128
 knot = xtk.UniformSpec(start=(-N/2 + 0.5,) * 2, step=1, num=(N, N))
 
 
-def save(fig, name):
-    fig.savefig(OUT / name, dpi=110, bbox_inches="tight", facecolor="white")
+def save(fig, name, dpi=110):
+    if name.endswith(".png"):
+        dpi = max(dpi, 200)          # displayed near 1:1, so give it real pixels
+    fig.savefig(OUT / name, dpi=dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print("wrote", name)
 
