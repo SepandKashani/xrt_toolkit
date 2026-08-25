@@ -697,8 +697,13 @@ def _xrt_ad_t(
                 - dr.select(p_b[idx] > 1.0 - eps, Float(1), Float(0))
             )
             n_abs = dr.abs(ray_n[idx])
+            # Face-transfer terms scale with |n| / n_idx (crossing positions
+            # sit at ray parameter (face - t_idx) / n_idx and transfer
+            # geometric length |n| d-alpha); with unit directions the |n|
+            # factor is invisible, but the forward accepts any scale.
             # When n[idx]=0 the ray never crosses idx-faces; sigma=0 too → return 0
-            g = dr.select(n_abs > eps, sigma / n_abs, Float(0))
+            n_norm = dr.norm(ray_n)
+            g = dr.select(n_abs > eps, sigma * n_norm / n_abs, Float(0))
             accum += fq * g
             return (accum,), Bool(True)
 
@@ -902,8 +907,13 @@ def _xrt_ad_n(
                 - dr.select(p_b[idx] > 1.0 - eps, Float(1), Float(0))
             )
             n_abs = dr.abs(ray_n[idx])
+            # Face-transfer terms scale with |n| / n_idx, as in _xrt_ad_t.
             # When n[idx]=0 the ray never crosses idx-faces; sigma=0 too → return 0
-            g_s       = dr.select(n_abs > eps, sigma     / n_abs, Float(0))
+            n_norm = dr.norm(ray_n)
+            # sigma encodes sign(n_idx) (1_in - 1_out); the crossing-motion
+            # term is |n| alpha_in (1_in - 1_out) / n_idx, while the exit
+            # chord term -L_fw 1_out / n_idx carries no |n| factor.
+            g_s       = dr.select(n_abs > eps, sigma * n_norm / n_abs, Float(0))
             local_g_d = dr.select(n_abs > eps, L_fw * sigma_out / n_abs, Float(0))
             p_a_phys = bbox_ll + (ArrayNf(index) + p_a) * knot_step
             # Dot product is robust for any direction (including axis-aligned).
@@ -914,7 +924,18 @@ def _xrt_ad_n(
                 dr.dot(p_a_phys - ray_t_init, ray_n) / n_norm_sq,
                 Float(0),
             )
-            g = local_g_d + fac_t * g_s
+            # The face-counting terms above differentiate the
+            # alpha-parameterized transform (per-cell weights 1/|n|), whose
+            # gradient carries a radial component -P n / |n|^2.  The shipped
+            # forward is the geometric (scale-invariant) one -- its radial
+            # derivative is exactly zero -- so add the per-cell counterpart
+            # of that term back (it telescopes to +P n_idx / |n|^2).
+            radial = dr.select(
+                n_norm_sq > eps * eps,
+                L_fw * ray_n[idx] / n_norm_sq,
+                Float(0),
+            )
+            g = local_g_d + fac_t * g_s + radial
             accum += fq * g
             return (accum,), Bool(True)
 

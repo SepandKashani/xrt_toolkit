@@ -227,6 +227,51 @@ def test_ad_n_tie_rays(order, surface):
     rel = np.abs(g_ad[keep] - g_fd[keep]) / np.abs(g_fd[keep])
     assert float(np.median(rel)) < 0.05
 
+def test_ad_n_3d_voxel_matches_fd():
+    # d/dn for the 3D order-0 closed form (vox2) against f64 central FD, at
+    # a non-unit |n| (cone_beam emits |n| ~ sdd).  Locks two contracts: the
+    # derivative matches the shipped geometric (scale-invariant) forward --
+    # no alpha-parameterization radial term -P n / |n|^2 -- and the
+    # face-transfer terms carry the correct |n| scaling.
+    from drjit.cuda.ad import Array3f64, Float64
+
+    rng = np.random.default_rng(7)
+    N, L = 24, 200
+    knot = xtk.UniformSpec.centered(step=1.0, num=(N, N, N))
+    ax = np.stack(np.meshgrid(*(np.arange(N) - (N - 1) / 2,) * 3,
+                              indexing="ij"))
+    vol = np.zeros((N, N, N))
+    for _ in range(5):
+        c = rng.uniform(-N / 5, N / 5, 3)
+        sg = rng.uniform(N / 12, N / 7)
+        vol += rng.uniform(0.5, 1.5) * np.exp(
+            -(((ax - c[:, None, None, None]) ** 2).sum(0)) / (2 * sg**2))
+    V = Float64(vol.ravel())
+    nv = np.array([0.31, 0.53, 0.79])
+    nv /= np.linalg.norm(nv)
+    u = np.cross(nv, [1.0, 0.0, 0.0])
+    u /= np.linalg.norm(u)
+    w = np.cross(nv, u)
+    t = (-1.5 * N) * nv[:, None] \
+        + u[:, None] * (rng.uniform(-N / 3, N / 3, L) + 0.17) \
+        + w[:, None] * (rng.uniform(-N / 3, N / 3, L) + 0.29)
+    n0 = np.repeat(2.0 * nv[:, None], L, axis=1)  # |n| = 2, deliberately
+
+    def val(eps):
+        n = n0.copy()
+        n[0] += eps
+        return np.asarray(xtk.xrt_apply(
+            (Array3f64(t), Array3f64(n)), knot, 0, V, mode="evaluated"))
+
+    g_ad = np.asarray(xtk.xrt_ad_n_x(
+        (Array3f64(t), Array3f64(n0)), knot, 0, V, mode="evaluated"))
+    h = 1e-5
+    g_fd = (val(+h) - val(-h)) / (2 * h)
+    keep = np.abs(g_fd) > 1e-3 * np.abs(g_fd).max()
+    rel = np.abs(g_ad[keep] - g_fd[keep]) / np.abs(g_fd[keep])
+    assert float(np.median(rel)) < 0.05
+
+
 def test_spline3d_fallback_matches_coopvec():
     # The portable (no cooperative vectors) evaluation of the 3D spline
     # network must agree with the tensor-core path to fp16 accuracy.
