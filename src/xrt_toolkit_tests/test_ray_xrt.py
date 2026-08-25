@@ -168,12 +168,72 @@ def test_ad_n_matches_fd(order):
     assert _fd_median_rel(val, grad) < 0.05
 
 
+@pytest.mark.parametrize("surface", ["diagonal", "axis"])
+@pytest.mark.parametrize("order", [1, 2])
+def test_ad_n_tie_rays(order, surface):
+    # d/dn for rays exactly on the model's branch surfaces: the lattice
+    # diagonal (|n_x| == |n_y|, rays at 45 deg) and the lattice axis
+    # (min(|n_x|, |n_y|) ~ 0, e.g. vertical rays -- note cos(pi/2) is 6e-17,
+    # not 0, in f64).  The projection model is continuous but kinked across
+    # both surfaces, so the derivative must return the two-sided
+    # (branch-averaged) slope; the one-sided slope it used to return is
+    # wrong by up to O(1) (~0.1-0.2 median relative on this geometry).
+    # f64: in fp32 both the FD reference and near-surface evaluations are
+    # noise-limited at the ~10% level, which hides exactly this defect.
+    from drjit.cuda.ad import Array2f64, Float64
+
+    rng = np.random.default_rng(2)
+    N, L = 64, 200
+    knot = xtk.UniformSpec.centered(step=1.0, num=(N, N))
+    ax = np.stack(np.meshgrid(np.arange(N), np.arange(N), indexing="ij"))
+    ax = ax - (N - 1) / 2
+    vol = np.zeros((N, N))
+    for _ in range(6):
+        cx, cy = rng.uniform(-N / 4, N / 4, 2)
+        sg = rng.uniform(N / 14, N / 8)
+        vol += rng.uniform(0.5, 1.5) * np.exp(
+            -((ax[0] - cx) ** 2 + (ax[1] - cy) ** 2) / (2 * sg**2))
+    V = Float64(vol.ravel())
+    # perturb the direction component transverse to the ray (the rotational
+    # part -- the radial part is exactly zero for this scale-invariant model)
+    th, comp, ad_fn = {
+        "diagonal": (np.deg2rad(45.0), 1, xtk.xrt_ad_n_y),
+        "axis": (np.pi / 2, 0, xtk.xrt_ad_n_x),
+    }[surface]
+    off = rng.uniform(-N / 2.5, N / 2.5, L)
+    t = np.stack([-N * np.cos(th) - off * np.sin(th),
+                  -N * np.sin(th) + off * np.cos(th)])
+    n0 = np.stack([np.full(L, np.cos(th)), np.full(L, np.sin(th))])
+
+    def val(eps):
+        n = n0.copy()
+        n[comp] += eps
+        return np.asarray(xtk.xrt_apply(
+            (Array2f64(t), Array2f64(n)), knot, order, V, mode="evaluated"))
+
+    g_ad = np.asarray(ad_fn(
+        (Array2f64(t), Array2f64(n0)), knot, order, V, mode="evaluated"))
+
+    # Central FD reference at the kink.  The order-2 forward additionally
+    # carries a small value jump J across the diagonal (a separate forward
+    # defect); FD picks it up as J/(2h), so estimate J by Richardson
+    # extrapolation (dP(h) = J + 2h*slope) and remove it.  (J ~ 0 across
+    # the axis; the correction is then a no-op.)
+    h, h1, h2 = 1e-5, 1e-8, 1e-7
+    J = (h2 * (val(+h1) - val(-h1)) - h1 * (val(+h2) - val(-h2))) / (h2 - h1)
+    g_fd = (val(+h) - val(-h) - J) / (2 * h)
+
+    keep = np.abs(g_fd) > 1e-3 * np.abs(g_fd).max()
+    rel = np.abs(g_ad[keep] - g_fd[keep]) / np.abs(g_fd[keep])
+    assert float(np.median(rel)) < 0.05
+
 def test_spline3d_fallback_matches_coopvec():
     # The portable (no cooperative vectors) evaluation of the 3D spline
     # network must agree with the tensor-core path to fp16 accuracy.
-    import xrt_toolkit.drjit.box_spline as bs
     from drjit.cuda import Array2f
     from drjit.cuda import Float as Fl
+
+    import xrt_toolkit.drjit.box_spline as bs
 
     if not bs.coop_vec_available(__import__(
             "xrt_toolkit.drjit.ray_xrt", fromlist=["net"]).net):

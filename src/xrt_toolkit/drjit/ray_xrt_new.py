@@ -17,10 +17,11 @@ FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
 
 # Neural network for 3D spline projection
-from drjit import nn as dnn
 from pathlib import Path
-from drjit.cuda.ad import Float32, Float16, TensorXf16
+
 import numpy as np
+from drjit import nn as dnn
+from drjit.cuda.ad import Float16, Float32, TensorXf16
 
 # The 3D spline network needs fp16 support; construction can fail on
 # exotic setups, in which case the portable fallback path is used
@@ -784,6 +785,7 @@ def _xrt_ad_n(
     buffer: FloatT,
     mode: str,
     idx: int,
+    _handle_ties: bool = True,
 ) -> FloatT:
     ray_t, ray_n = ray_spec
     ray_t_init = dr.copy(ray_t)
@@ -801,6 +803,57 @@ def _xrt_ad_n(
     assert order in (0, 1, 2)
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
+
+    if (D == 2) and _handle_ties:
+        # The 2D projection model is continuous but kinked in `ray_n` on two
+        # surfaces (d = n / step): the lattice diagonals |d.x| == |d.y| and
+        # the lattice axes min(|d.x|, |d.y|) == 0.  On both, a |dot(n_perp,
+        # .)| entry of the box-spline generator E crosses its |.| kink and
+        # the E-mask degeneracy cut engages (the diagonal also flips
+        # `look_lr`).  Differentiating there returns one arbitrary one-sided
+        # slope, wrong by up to O(1) for orders >= 1.  (Rays built from
+        # cos/sin are microscopically off the vertical axis -- cos(pi/2) is
+        # 6e-17, not 0 -- which puts them on one side of the axis kink;
+        # exactly-zero components hit dr.abs' sign(0) = 0 convention, which
+        # happens to drop the kink term and give the right answer.  The tie
+        # handling makes both cases exact by construction.)
+        # On tie lanes, evaluate the derivative on both sides of the surface
+        # (directions rotated by -/+ delta) and average: the two-sided
+        # (Clarke) derivative of the kinked forward, which is what a central
+        # finite difference converges to.  Off-tie lanes are bit-identical to
+        # the plain evaluation, and tie-free calls take the plain path.
+        # (xrt_ad_t_* needs no such handling: perturbing the anchor cannot
+        # move the direction across either surface.)
+        d = ray_n * dr.rcp(ArrayNf(*knot_spec.step))
+        abs_dx = dr.abs(d.x)
+        abs_dy = dr.abs(d.y)
+        tol = max(1e-9, 8 * dr.epsilon(Float))
+        big = dr.maximum(abs_dx, abs_dy)
+        tie_diag = dr.abs(abs_dx - abs_dy) <= tol * big
+        tie_axis = dr.minimum(abs_dx, abs_dy) <= tol * big
+        tie = tie_diag | tie_axis
+        if bool(dr.any(tie)):  # decided per call, before any kernel is traced
+            delta = max(1e-11, 32 * dr.epsilon(Float))  # rotation angle [rad]
+            n_p = dr.select(
+                tie,
+                ArrayNf(ray_n.x - delta * ray_n.y, ray_n.y + delta * ray_n.x),
+                ray_n,
+            )
+            n_m = dr.select(
+                tie,
+                ArrayNf(ray_n.x + delta * ray_n.y, ray_n.y - delta * ray_n.x),
+                ray_n,
+            )
+            g_p = _xrt_ad_n(
+                (ray_t, n_p), knot_spec, order, data, None, mode, idx,
+                _handle_ties=False,
+            )
+            g_m = _xrt_ad_n(
+                (ray_t, n_m), knot_spec, order, data, None, mode, idx,
+                _handle_ties=False,
+            )
+            g = 0.5 * (g_p + g_m)
+            return g if buffer is None else buffer + g
 
     L_size = max(ray_t.shape[1], ray_n.shape[1])
     if buffer is None:
