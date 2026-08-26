@@ -1,0 +1,7 @@
+# bulk downloads (fetched on demand, see README)
+walnut/
+data/*.mrcs
+data/ct_walnut_prep.npz
+# large reconstructed volumes (regenerate with the scripts)
+results/*.npy
+data/cryo/

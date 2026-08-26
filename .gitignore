@@ -2,6 +2,9 @@
 dev/scratch/*
 !dev/scratch/README
 
+src/test.py
+src/data_3D__spline.npy
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -179,3 +182,7 @@ cupy/
 
 # Zip files
 *.zip
+xtk_experiments/usct_kwave_data.npz
+
+# Sphinx build output
+doc/_build/
