@@ -261,6 +261,10 @@ def dda(
         cond=lambda *args: args[0],
         mode=mode,
         labels=("active", "state", "dt_v", "p1", "pi", "t_rem"),
-        max_iterations=-1,
+        # -1 (an unbounded dynamic loop) silently detaches the loop-carried
+        # state, so reverse-mode AD returns a zero gradient for anything used
+        # only inside the march -- the ray direction, in particular.  A finite
+        # bound keeps the loop differentiable.  The default is unchanged.
+        max_iterations=-1 if max_iterations is None else max_iterations,
     )[1]
 
