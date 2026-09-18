@@ -292,3 +292,60 @@ def test_spline3d_fallback_matches_coopvec():
     a = np.asarray(bs.nn_project(net, Fl(x), Fl(z), n))
     b = np.asarray(bs.nn_project_plain(Fl(x), Fl(z), n))
     assert np.abs(a - b).max() < 5e-3
+
+
+def test_order2_forward_diagonal_discontinuity():
+    """Pin the size of the order-2 forward's jump across the lattice diagonal.
+
+    `xrt_apply` picks the DDA's main axis with `|n_x| >= |n_y|`, and the
+    lateral stencil is three cells wide.  At order 2 the box-spline footprint
+    reaches +/-1.41 cells in perpendicular distance, which is +/-2 lateral
+    cells at 45 deg, so the two sides of the tie truncate the footprint
+    differently and the forward is discontinuous there.  Orders 0 and 1 are
+    continuous (their footprints fit the stencil).
+
+    The jump is ~5.9e-6 relative, about 4.7x the fp32 noise floor: harmless
+    for reconstruction, but it defeats a naive central FD of `xrt_ad_n_*` on
+    diagonal rays, where FD reads J / (2h).  `test_ad_n_tie_rays` removes it
+    by Richardson extrapolation.  Removing the jump itself needs a wider
+    lateral stencil and a re-derived double-counting rule; this test exists so
+    the number cannot grow unnoticed in the meantime.
+    """
+    from drjit.cuda.ad import Array2f64, Float64
+
+    rng = np.random.default_rng(0)
+    N = 48
+    knot = xtk.UniformSpec(start=(-N / 2 + 0.5,) * 2, step=1, num=(N, N))
+    ax = np.mgrid[:N, :N] - N / 2
+    vol = np.zeros((N, N))
+    for _ in range(6):
+        cx, cy = rng.uniform(-N / 4, N / 4, 2)
+        sg = rng.uniform(2, 5)
+        vol += rng.uniform(0.5, 1.5) * np.exp(
+            -((ax[0] - cx) ** 2 + (ax[1] - cy) ** 2) / (2 * sg**2))
+    V = Float64(vol.ravel())
+    L, off = 256, rng.uniform(-N / 2.5, N / 2.5, 256)
+
+    def P(theta, order):
+        t = np.stack([-N * np.cos(theta) - off * np.sin(theta),
+                      -N * np.sin(theta) + off * np.cos(theta)])
+        n = np.stack([np.full(L, np.cos(theta)), np.full(L, np.sin(theta))])
+        return np.asarray(xtk.xrt_apply((Array2f64(t), Array2f64(n)), knot,
+                                        order, V, mode="evaluated"))
+
+    h, diag = 1e-8, np.deg2rad(45.0)
+    scale = np.median(np.abs(P(diag, 2)))
+
+    # orders 0 and 1: continuous, so the difference vanishes with h
+    for order in (0, 1):
+        jump = np.median(np.abs(P(diag + h, order) - P(diag - h, order)))
+        assert jump / scale < 1e-7, (order, jump / scale)
+
+    # order 2: a genuine jump, currently 5.9e-6 relative
+    jump2 = np.median(np.abs(P(diag + h, 2) - P(diag - h, 2))) / scale
+    assert 1e-6 < jump2 < 2e-5, jump2
+
+    # ... and it is specific to the tie: a generic angle is continuous
+    gen = np.deg2rad(37.0)
+    off_tie = np.median(np.abs(P(gen + h, 2) - P(gen - h, 2))) / scale
+    assert off_tie < 5e-7, off_tie
