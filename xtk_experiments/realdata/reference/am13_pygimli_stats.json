@@ -1,0 +1,49 @@
+{
+  "pygimli_version": "1.6.0",
+  "units": "SI internally (m, s); velocities reported in m/ns",
+  "n_data": 702,
+  "n_sensors": 90,
+  "mesh_cells": 960,
+  "mesh_nodes": 1029,
+  "cell_size_m": 0.25,
+  "sec_nodes": 3,
+  "lambda_scan": {
+    "2000": {
+      "chi2": 1.3287189156318897,
+      "rms_ns": 0.922160564112568,
+      "iters": 3
+    },
+    "1000": {
+      "chi2": 1.001457213365123,
+      "rms_ns": 0.8005826731535467,
+      "iters": 3
+    },
+    "500": {
+      "chi2": 0.8136148577636596,
+      "rms_ns": 0.7216048149567343,
+      "iters": 1
+    },
+    "200": {
+      "chi2": 0.5639448562473524,
+      "rms_ns": 0.6007700957923134,
+      "iters": 1
+    },
+    "50": {
+      "chi2": 0.35328216189357187,
+      "rms_ns": 0.4755003508010127,
+      "iters": 1
+    }
+  },
+  "chosen_lambda": 1000.0,
+  "chi2": 1.001457213365123,
+  "rms_ns": 0.8005826731535467,
+  "iterations": 3,
+  "start_velocity_mns": 0.13971083837439754,
+  "start_rms_ns": 2.6753012003487844,
+  "vel_min_mns": 0.13180726682675434,
+  "vel_max_mns": 0.1593300162075827,
+  "vel_mean_mns": 0.14334302317951805,
+  "layer_boundary_depth_m": 7.9,
+  "mean_v_above_mns": 0.13569704046638945,
+  "mean_v_below_mns": 0.15544423505161775
+}

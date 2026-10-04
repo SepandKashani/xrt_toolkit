@@ -1,0 +1,186 @@
+/* ---------------------------------------------------------------- webfonts
+   Self-hosted so the docs build and render without calling out to a CDN. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ------------------------------------------------- geometry colour key
+   The same colours mark the same quantity in the figures and in the code. */
+.xtk-vol,
+.xtk-u1,
+.xtk-u2,
+.xtk-ax1 {
+  font-weight: 600;
+}
+.xtk-vol { color: #1a7f37; }
+.xtk-u1  { color: #1f6feb; }
+.xtk-u2  { color: #bc4c00; }
+.xtk-ax1 { color: #57606a; }
+
+body[data-theme="dark"] .xtk-vol { color: #3fb950; }
+body[data-theme="dark"] .xtk-u1  { color: #58a6ff; }
+body[data-theme="dark"] .xtk-u2  { color: #ff9f4a; }
+body[data-theme="dark"] .xtk-ax1 { color: #a3acb6; }
+
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) .xtk-vol { color: #3fb950; }
+  body:not([data-theme="light"]) .xtk-u1  { color: #58a6ff; }
+  body:not([data-theme="light"]) .xtk-u2  { color: #ff9f4a; }
+  body:not([data-theme="light"]) .xtk-ax1 { color: #a3acb6; }
+}
+
+/* --------------------------------------------------------------- measure
+   Furo hard-codes .content{width:46em}; 43em reads better for prose.
+   Scoped above furo's mobile breakpoint so narrow screens stay fluid. */
+@media (min-width: 48.01em) {
+  .content { width: 43em; }
+}
+
+/* ------------------------------------------------------------ typography */
+h1, h2, h3, h4, h5 {
+  letter-spacing: -0.011em;               /* Inter wants slight negative tracking */
+  font-weight: 650;
+}
+h1 { letter-spacing: -0.021em; }
+article { line-height: 1.62; }
+
+/* --------------------------------------------------------------- code */
+div.highlight,
+div.literal-block-wrapper {
+  border: 1px solid var(--color-background-border);
+  border-radius: 0.5rem;
+}
+div.highlight pre {
+  font-size: 0.855em;
+  line-height: 1.55;
+}
+code.literal {
+  font-size: 0.875em;
+  border-radius: 0.25rem;
+}
+
+/* ------------------------------------------------------------- figures */
+figcaption, .caption-text {
+  font-size: 0.9em;
+  color: var(--color-foreground-secondary);
+}
+figure { margin-block: 1.6rem; }
+
+/* -------------------------------------------------------------- tables */
+table.docutils th {
+  border-bottom: 2px solid var(--color-background-border);
+  font-weight: 600;
+}
+table.docutils td, table.docutils th { border-left: none; border-right: none; }
+
+/* ---------------------------------------------------- sphinx-design tint */
+:root {
+  --sd-color-primary: #0e7490;
+  --sd-color-primary-text: #ffffff;
+  --sd-color-primary-highlight: #155e75;
+  --sd-color-card-border: var(--color-background-border);
+}
+body[data-theme="dark"] { --sd-color-primary: #22d3ee; --sd-color-primary-text: #0b1013; }
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) { --sd-color-primary: #22d3ee;
+                                   --sd-color-primary-text: #0b1013; }
+}
+.sd-card { transition: border-color 120ms ease, transform 120ms ease; }
+.sd-card:hover { border-color: var(--sd-color-primary); }
+
+/* ----------------------------------------------------------- front page */
+p.xtk-lead {
+  font-size: 1.16rem;
+  line-height: 1.6;
+  color: var(--color-foreground-secondary);
+  margin-top: 0.4rem;
+}
+.xtk-hero { margin: 1.4rem 0 2.4rem; }
+.xtk-hero .sd-btn { font-weight: 550; }
+.xtk-hero div.highlight { margin: 0; }
+
+/* ------------------------------------------------------------- stat tiles
+   Four numbers the docs already stand behind, ruled in the brand colour. */
+.xtk-stats { margin: 1.7rem 0 2.3rem; }
+.xtk-stats .sd-col {
+  border-top: 2px solid var(--color-brand-primary);
+  padding-top: 0.55rem;
+}
+p.xtk-stat-n {
+  font-size: 1.85rem;
+  font-weight: 680;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-brand-primary);
+  margin: 0 0 0.15rem;
+}
+p.xtk-stat-l {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--color-foreground-secondary);
+  margin: 0;
+}
+
+/* --------------------------------------------------------- heading rhythm
+   A short accent under each section heading, not a full rule. */
+article h2::after {
+  content: "";
+  display: block;
+  width: 2.25rem;
+  height: 3px;
+  margin-top: 0.42rem;
+  border-radius: 2px;
+  background: var(--color-brand-primary);
+}
+
+/* ------------------------------------------------- cheat-sheet rules table
+   Tinted header, faint stripes, and the consequence column in red. */
+.xtk-rules th { background: rgba(14, 116, 144, 0.10); }
+.xtk-rules tbody tr:nth-child(2n) { background: rgba(14, 116, 144, 0.045); }
+.xtk-rules td:last-child { color: #b42318; }
+
+body[data-theme="dark"] .xtk-rules th { background: rgba(34, 211, 238, 0.14); }
+body[data-theme="dark"] .xtk-rules tbody tr:nth-child(2n) {
+  background: rgba(34, 211, 238, 0.06);
+}
+body[data-theme="dark"] .xtk-rules td:last-child { color: #fca5a5; }
+
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) .xtk-rules th {
+    background: rgba(34, 211, 238, 0.14);
+  }
+  body:not([data-theme="light"]) .xtk-rules tbody tr:nth-child(2n) {
+    background: rgba(34, 211, 238, 0.06);
+  }
+  body:not([data-theme="light"]) .xtk-rules td:last-child { color: #fca5a5; }
+}
