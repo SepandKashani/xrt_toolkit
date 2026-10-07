@@ -8,10 +8,19 @@ import xrt_toolkit.util as xrtu
 from .bbox import bbox_contains, ray_bbox_intersect
 from .dda import dda
 from .spline2d import spline2d_adjoint, spline2d_apply
-from .spline3d import spline3d_grid, spline3d_stencil
+from .spline3d import (
+    NO_CELL,
+    spline3d_advance,
+    spline3d_flush,
+    spline3d_grid,
+    spline3d_mirror,
+    spline3d_stencil,
+    spline3d_weights,
+)
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
+ArrayNiT = typ.TypeVar("ArrayNiT", bound=dr.AnyArray)
 ArrayNuT = typ.TypeVar("ArrayNuT", bound=dr.AnyArray)
 FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
@@ -317,26 +326,44 @@ def xrt_adjoint(
         return spline2d_adjoint((ray_t, ray_n), knot_spec, order, data, buffer)
 
     elif (D == 3) and (order > 0):
-        state = (buffer,)
+        # running sums of the (order + 1)**3 basis functions overlapping the current
+        # cell: each is written once, when the ray leaves its support (see spline3d.py).
+        fwd = ray_n >= 0  # travel direction
+        sums = [dr.zeros(Float, L) for _ in range((order + 1) ** 3)]
+        cell = dr.full(dr.int32_array_t(ArrayNf), NO_CELL, L)
+        state = (sums, cell)
 
         def back_project(
-            state: tuple[FloatT],
+            state: tuple[list[FloatT], ArrayNiT],
             index: ArrayNuT,
             p_a: ArrayNfT,
             p_b: ArrayNfT,
             active: BoolT,
-        ) -> tuple[tuple[FloatT], BoolT]:
+        ) -> tuple[tuple[list[FloatT], ArrayNiT], BoolT]:
             # exact ray/cell projections of the (order + 1)**3 basis functions.
-            (accum,) = state
+            (sums, cell) = state
 
-            for offset, valid, L in spline3d_stencil(
-                order, index, p_a, p_b, knot_step, knot_num, stride
-            ):
-                dr.scatter_add(
-                    accum, L * data, offset, valid & active, mode=dr.ReduceMode.Direct
-                )
+            sums, cell = spline3d_advance(
+                order,
+                sums,
+                cell,
+                type(cell)(index),
+                active,
+                fwd,
+                knot_num,
+                stride,
+                data,
+                buffer,
+            )
+            L = spline3d_weights(
+                order,
+                spline3d_mirror(fwd, p_a),
+                spline3d_mirror(fwd, p_b),
+                knot_step,
+            )
+            sums = [dr.select(active, s + l, s) for (s, l) in zip(sums, L)]
 
-            return (accum,), Bool(True)
+            return (sums, cell), Bool(True)
 
         # walk the grid of polynomial pieces (covers every basis support).
         bbox_ll, bbox_ur, grid_res = spline3d_grid(
@@ -366,5 +393,10 @@ def xrt_adjoint(
         mode="symbolic",
         max_iterations=-1,
     )
+
+    if (D == 3) and (order > 0):
+        # write the running sums left at the end of the walk.
+        (sums, cell) = state
+        spline3d_flush(order, sums, cell, fwd, knot_num, stride, data, buffer)
 
     return buffer

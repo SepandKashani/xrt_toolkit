@@ -156,3 +156,38 @@ def test_integral(order, step):
             xtk.xrt_apply(ray_spec, knot_spec, order, Float(f.ravel())), np.float64
         )
         assert abs(p.sum() * h * h - 1) < 1e-4
+
+
+@pytest.mark.parametrize("order", [1, 2])
+def test_adjoint_transpose(order):
+    # The adjoint equals the transpose of the forward, built column by column.
+    # Half the rays go through lattice points along axes / face / body diagonals:
+    # they cross cell edges and corners, where the walk steps along several axes at once.
+    rng = np.random.default_rng(order)
+    start, step, num = np.array([-1.0, 0.5, 2.0]), np.array([1.0, 0.5, 2.0]), (5, 6, 7)
+    knot_spec = xtk.UniformSpec(start=tuple(start), step=tuple(step), num=num)
+    hi = start + step * (np.array(num) - 1)
+
+    t = rng.uniform(start - 2, hi + 2, (100, 3))
+    n = rng.standard_normal((100, 3))
+    d = rng.choice([-1.0, 0.0, 1.0], (100, 3))
+    d[~d.any(1)] = 1
+    t = np.r_[t, start + step * rng.integers(0, num, (100, 3)) - 50 * d * step]
+    n = np.r_[n, d * step]
+    ray_spec = (Array3f(t.T.astype(np.float32)), Array3f(n.T.astype(np.float32)))
+
+    Q = int(np.prod(num))
+    A = np.stack(
+        [
+            np.asarray(
+                xtk.xrt_apply(
+                    ray_spec, knot_spec, order, Float(np.eye(1, Q, q, np.float32)[0])
+                )
+            )
+            for q in range(Q)
+        ],
+        axis=1,
+    )
+    p = rng.standard_normal(len(t)).astype(np.float32)
+    f = np.asarray(xtk.xrt_adjoint(ray_spec, knot_spec, order, Float(p)))
+    assert np.abs(f - A.T @ p).max() < 1e-5 * np.abs(A.T @ p).max()
