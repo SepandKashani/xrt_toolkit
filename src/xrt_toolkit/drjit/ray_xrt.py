@@ -330,7 +330,7 @@ def xrt_adjoint(
 
             offset = dr.dot(index, stride)
             L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
-            dr.scatter_add(accum, L * data, offset, active)
+            dr.scatter_add(accum, L * data, offset, active, mode=dr.ReduceMode.Direct)
 
             return (accum,), Bool(True)
 
@@ -389,9 +389,15 @@ def xrt_adjoint(
                 ),
             )
 
-            dr.scatter_add(accum, L_l * data, offset_l, active_lmr.x)
-            dr.scatter_add(accum, L_m * data, offset_m, active_lmr.y)
-            dr.scatter_add(accum, L_r * data, offset_r, active_lmr.z)
+            dr.scatter_add(
+                accum, L_l * data, offset_l, active_lmr.x, mode=dr.ReduceMode.Direct
+            )
+            dr.scatter_add(
+                accum, L_m * data, offset_m, active_lmr.y, mode=dr.ReduceMode.Direct
+            )
+            dr.scatter_add(
+                accum, L_r * data, offset_r, active_lmr.z, mode=dr.ReduceMode.Direct
+            )
 
             return (accum, ArrayNi(index)), Bool(True)
 
