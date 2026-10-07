@@ -8,6 +8,7 @@ import xrt_toolkit.util as xrtu
 from .bbox import bbox_contains, ray_bbox_intersect
 from .box_spline import box_spline_1d_dr, box_spline_1d_E
 from .dda import dda
+from .spline3d import spline3d_grid, spline3d_stencil
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -85,6 +86,20 @@ def xrt_apply(
              \bbE = [\bbDelta_{1}           0  \bbDelta_{1}  \bbDelta_{1}
                                0  \bbDelta_{2} \bbDelta_{2} -\bbDelta_{2}]
 
+        * order = 1, 2 (3D): tensor-product B-splines (trilinear, triquadratic)
+
+          .. math::
+
+             \psi(\bbx)
+             =
+             \beta^{k}(x_{1} / \Delta_{1})
+             \beta^{k}(x_{2} / \Delta_{2})
+             \beta^{k}(x_{3} / \Delta_{3}),
+             \quad
+             \beta^{k} = \mathbb{1}_{[-1/2, 1/2]}^{\ast (k+1)},
+             \quad
+             k = \text{order}
+
         The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
 
     data: FloatT
@@ -129,6 +144,7 @@ def xrt_apply(
     knot_num = ArrayNu(*knot_spec.num)
     bbox_ll = knot_start - (knot_step / 2)
     bbox_ur = knot_start - (knot_step / 2) + (knot_num * knot_step)
+    grid_res = knot_num
     if D == 2:
         stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
@@ -216,7 +232,30 @@ def xrt_apply(
             return (accum, ArrayNi(index)), Bool(True)
 
     elif (D == 3) and (order > 0):
-        raise NotImplementedError  # todo
+        state = (buffer,)
+
+        def project(
+            state: tuple[FloatT],
+            index: ArrayNuT,
+            p_a: ArrayNfT,
+            p_b: ArrayNfT,
+            active: BoolT,
+        ) -> tuple[tuple[FloatT], BoolT]:
+            # exact ray/cell projections of the (order + 1)**3 basis functions.
+            (accum,) = state
+
+            for offset, valid, L in spline3d_stencil(
+                order, index, p_a, p_b, knot_step, knot_num, stride
+            ):
+                fq = dr.gather(Float, data, offset, valid & active)
+                accum += fq * L
+
+            return (accum,), Bool(True)
+
+        # walk the grid of polynomial pieces (covers every basis support).
+        bbox_ll, bbox_ur, grid_res = spline3d_grid(
+            knot_start, knot_step, knot_num, order
+        )
 
     # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
     # -> rewind `ray_t` for it to lie outside the bbox boundary.
@@ -232,7 +271,7 @@ def xrt_apply(
         ray_o=ray_t,
         ray_d=ray_n,
         ray_max=Float(dr.inf),
-        grid_res=knot_num,
+        grid_res=grid_res,
         grid_min=bbox_ll,
         grid_max=bbox_ur,
         func=project,
@@ -310,6 +349,7 @@ def xrt_adjoint(
     knot_num = ArrayNu(*knot_spec.num)
     bbox_ll = knot_start - (knot_step / 2)
     bbox_ur = knot_start - (knot_step / 2) + (knot_num * knot_step)
+    grid_res = knot_num
     if D == 2:
         stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
@@ -402,7 +442,31 @@ def xrt_adjoint(
             return (accum, ArrayNi(index)), Bool(True)
 
     elif (D == 3) and (order > 0):
-        raise NotImplementedError  # todo
+        state = (buffer,)
+
+        def back_project(
+            state: tuple[FloatT],
+            index: ArrayNuT,
+            p_a: ArrayNfT,
+            p_b: ArrayNfT,
+            active: BoolT,
+        ) -> tuple[tuple[FloatT], BoolT]:
+            # exact ray/cell projections of the (order + 1)**3 basis functions.
+            (accum,) = state
+
+            for offset, valid, L in spline3d_stencil(
+                order, index, p_a, p_b, knot_step, knot_num, stride
+            ):
+                dr.scatter_add(
+                    accum, L * data, offset, valid & active, mode=dr.ReduceMode.Direct
+                )
+
+            return (accum,), Bool(True)
+
+        # walk the grid of polynomial pieces (covers every basis support).
+        bbox_ll, bbox_ur, grid_res = spline3d_grid(
+            knot_start, knot_step, knot_num, order
+        )
 
     # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
     # -> rewind `ray_t` for it to lie outside the bbox boundary.
@@ -418,7 +482,7 @@ def xrt_adjoint(
         ray_o=ray_t,
         ray_d=ray_n,
         ray_max=Float(dr.inf),
-        grid_res=knot_num,
+        grid_res=grid_res,
         grid_min=bbox_ll,
         grid_max=bbox_ur,
         func=back_project,

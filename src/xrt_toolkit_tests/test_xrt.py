@@ -74,10 +74,6 @@ def test_value_apply(knot_spec):
 @pytest.mark.parametrize("order", [0, 1, 2])
 def test_math_adjoint(knot_spec, order):
     # <A f, p> = <f, A^T p>
-    D = knot_spec.ndim
-    if (D == 3) and (order > 0):
-        pytest.skip("3D order > 0 not implemented.")
-
     rng = np.random.default_rng(1)
     L = 1_000
     ray_spec = random_rays(knot_spec, L, rng)
@@ -120,9 +116,6 @@ def test_struct_apply(knot_spec, beam):
 @pytest.mark.parametrize("order", [0, 1, 2])
 def test_struct_math_adjoint(knot_spec, beam, order):
     D = knot_spec.ndim
-    if (D == 3) and (order > 0):
-        pytest.skip("3D order > 0 not implemented.")
-
     rng = np.random.default_rng(3)
     angles = Float(np.linspace(0, np.pi, 7, endpoint=False, dtype=np.float32))
     detector_spec = xtk.util.DetectorSpec(size=40, num_cell=(11, 9)[: D - 1])

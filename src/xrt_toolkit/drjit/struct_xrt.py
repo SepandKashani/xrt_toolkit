@@ -100,6 +100,20 @@ def xrt_struct_apply(
              \bbE = [\bbDelta_{1}           0  \bbDelta_{1}  \bbDelta_{1}
                                0  \bbDelta_{2} \bbDelta_{2} -\bbDelta_{2}]
 
+        * order = 1, 2 (3D): tensor-product B-splines (trilinear, triquadratic)
+
+          .. math::
+
+             \psi(\bbx)
+             =
+             \beta^{k}(x_{1} / \Delta_{1})
+             \beta^{k}(x_{2} / \Delta_{2})
+             \beta^{k}(x_{3} / \Delta_{3}),
+             \quad
+             \beta^{k} = \mathbb{1}_{[-1/2, 1/2]}^{\ast (k+1)},
+             \quad
+             k = \text{order}
+
         The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
 
     data: FloatT
