@@ -142,9 +142,14 @@ def box_spline_1d_dr(
         N_tot = dr.size_v(ArrayNf)
         assert 2 <= N_tot <= 4
 
+        def pow_k(z: FloatT, k: IntT) -> FloatT:
+            # z**k for k in {1, 2, 3} by multiplication: an Int-array exponent
+            # compiles to exp2(k * log2(z)), which is slower and less accurate.
+            return z * dr.select(k >= 2, z, 1) * dr.select(k >= 3, z, 1)
+
         y = dr.zeros(Float, dr.shape(x))
         N_nz = dr.sum(E_mask)
-        lhs_expr = lambda sign: dr.maximum(0, x + 0.5 * sign @ E) ** (N_nz - 1)
+        lhs_expr = lambda sign: pow_k(dr.maximum(0, x + 0.5 * sign @ E), N_nz - 1)
         if N_tot == 2:
             lhs = lhs_expr(ArrayNf(+1, +1))
             rhs = 1 * 1
