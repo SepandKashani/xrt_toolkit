@@ -1,9 +1,9 @@
 import math
 
+import drjit as dr
 import numpy as np
 import pytest
 
-import drjit as dr
 import xrt_toolkit as xtk
 
 try:
@@ -55,7 +55,8 @@ def test_value_apply(knot_spec):
     t, n, p_gt = [], [], []
     for axis in range(D):
         centers = [start[d] + step[d] * np.arange(num[d]) for d in range(D)]
-        centers[axis] = np.array([start[axis] - 3 * step[axis]])  # anchor outside the volume
+        # anchor outside the volume
+        centers[axis] = np.array([start[axis] - 3 * step[axis]])
         _t = np.stack([c.ravel() for c in np.meshgrid(*centers, indexing="ij")])
         _n = np.zeros_like(_t)
         _n[axis] = 1
