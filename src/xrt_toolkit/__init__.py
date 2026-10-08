@@ -19,6 +19,9 @@ from .drjit.struct_xrt import (
     xrt_struct_adjoint as xrt_struct_adjoint,
     xrt_struct_apply as xrt_struct_apply,
 )
+from .interop import (
+    from_astra as from_astra,
+)
 from .util import (
     UniformSpec as UniformSpec,
     asarray as asarray,
