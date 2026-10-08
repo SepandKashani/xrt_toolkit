@@ -31,7 +31,7 @@ import drjit as dr
 
 import xrt_toolkit.util as xrtu
 
-from .bbox import bbox_contains, ray_bbox_intersect
+from .bbox import ray_bbox_intersect
 from .box_spline import box_spline_1d_E
 
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -149,14 +149,10 @@ def _setup(
     bbox_ll = knot_start - (knot_step / 2)
     bbox_ur = knot_start - (knot_step / 2) + (knot_num * knot_step)
 
-    # rewind anchors inside the bbox (as xrt_apply)
+    # move the anchor just before the bbox entry (as xrt_apply)
     active, t1, t2 = ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_n)
     t_min = dr.minimum(t1, t2)
-    ray_o = dr.select(
-        active & bbox_contains(bbox_ll, bbox_ur, ray_t),
-        ray_t + (t_min - 1) * ray_n,
-        ray_t,
-    )
+    ray_o = dr.select(active, ray_t + (t_min - 1) * ray_n, ray_t)
 
     # grid coordinates, entry/exit (as dda)
     grid_res = ArrayNf(knot_num)

@@ -5,7 +5,7 @@ import drjit as dr
 
 import xrt_toolkit.util as xrtu
 
-from .bbox import bbox_contains, ray_bbox_intersect
+from .bbox import ray_bbox_intersect
 from .dda import dda
 from .spline2d import spline2d_adjoint, spline2d_apply
 from .spline3d import (
@@ -206,12 +206,12 @@ def xrt_apply(
             knot_start, knot_step, knot_num, order
         )
 
-    # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
-    # -> rewind `ray_t` for it to lie outside the bbox boundary.
+    # dda() walks forward from `ray_t`, but we integrate the whole line.
+    # -> move `ray_t` just before the bbox entry, wherever it lies on the line.
     active, t1, t2 = ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_n)
     t_min = dr.minimum(t1, t2)
     ray_t = dr.select(
-        active & bbox_contains(bbox_ll, bbox_ur, ray_t),
+        active,
         ray_t + (t_min - 1) * ray_n,  # go a bit further to be truly outside bbox
         ray_t,
     )
@@ -370,12 +370,12 @@ def xrt_adjoint(
             knot_start, knot_step, knot_num, order
         )
 
-    # dda() starts the walk from `ray_t`, but we want to start from the bbox boundary.
-    # -> rewind `ray_t` for it to lie outside the bbox boundary.
+    # dda() walks forward from `ray_t`, but we integrate the whole line.
+    # -> move `ray_t` just before the bbox entry, wherever it lies on the line.
     active, t1, t2 = ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_n)
     t_min = dr.minimum(t1, t2)
     ray_t = dr.select(
-        active & bbox_contains(bbox_ll, bbox_ur, ray_t),
+        active,
         ray_t + (t_min - 1) * ray_n,  # go a bit further to be truly outside bbox
         ray_t,
     )

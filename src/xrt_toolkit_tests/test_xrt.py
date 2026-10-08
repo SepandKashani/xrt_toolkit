@@ -86,6 +86,32 @@ def test_math_adjoint(knot_spec, order):
     assert np.isclose(lhs, rhs, rtol=1e-4)
 
 
+@pytest.mark.parametrize("order", [0, 1, 2])
+def test_anchor_anywhere(knot_spec, order):
+    # The whole line is integrated, wherever the anchor lies on it:
+    # before, inside or after the volume.
+    D = knot_spec.ndim
+    rng = np.random.default_rng(4)
+    L = 500
+    t, n = (np.asarray(a) for a in random_rays(knot_spec, L, rng))
+    f = Float(rng.standard_normal(math.prod(knot_spec.num)).astype(np.float32))
+    p = Float(rng.standard_normal(L).astype(np.float32))
+    ArrayNf = array_t(D)
+
+    out = []
+    for shift in (-100, 0, 100):
+        ray_spec = (ArrayNf((t + shift * n).astype(np.float32)), ArrayNf(n))
+        out.append(
+            (
+                np.asarray(xtk.xrt_apply(ray_spec, knot_spec, order, f)),
+                np.asarray(xtk.xrt_adjoint(ray_spec, knot_spec, order, p)),
+            )
+        )
+    for fwd, adj in out:
+        assert np.abs(fwd - out[1][0]).max() < 1e-4 * np.abs(out[1][0]).max()
+        assert np.abs(adj - out[1][1]).max() < 1e-4 * np.abs(out[1][1]).max()
+
+
 def struct_spec(D: int, beam: str) -> tuple:
     angles = Float(np.linspace(0, np.pi, 7, endpoint=False, dtype=np.float32))
     detector_spec = xtk.util.DetectorSpec(size=40, num_cell=(11, 9)[: D - 1])
@@ -129,8 +155,11 @@ def test_struct_apply(knot_spec, beam, order):
 
     f = Float(rng.standard_normal(math.prod(knot_spec.num)).astype(np.float32))
     p = xtk.xrt_struct_apply(ray_spec, knot_spec, order, f)
-    p_gt = xtk.xrt_apply((ArrayNf(t), ArrayNf(n)), knot_spec, order, f)
-    assert np.allclose(np.asarray(p), np.asarray(p_gt), atol=1e-4)
+    p, p_gt = (
+        np.asarray(p),
+        np.asarray(xtk.xrt_apply((ArrayNf(t), ArrayNf(n)), knot_spec, order, f)),
+    )
+    assert np.abs(p - p_gt).max() < 1e-4 * np.abs(p_gt).max()
 
 
 @pytest.mark.parametrize("beam", ["parallel", "cone"])
