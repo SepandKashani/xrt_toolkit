@@ -15,6 +15,7 @@ from .drjit.ray_xrt import (
     xrt_apply as xrt_apply,
 )
 from .drjit.struct_xrt import (
+    struct_rays as struct_rays,
     xrt_struct_adjoint as xrt_struct_adjoint,
     xrt_struct_apply as xrt_struct_apply,
 )

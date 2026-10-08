@@ -8,6 +8,7 @@ import xrt_toolkit.util as xrtu
 from .ray_xrt import xrt_adjoint, xrt_apply
 
 ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
+ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
 FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNNfT, ArrayNNfT, xrtu.UniformSpec]
 
@@ -154,7 +155,7 @@ def xrt_struct_apply(
         assert len(buffer) == L
     # -----------------------------------------------------
 
-    return xrt_apply(_rays(ray_spec), knot_spec, order, data, buffer)
+    return xrt_apply(struct_rays(ray_spec), knot_spec, order, data, buffer)
 
 
 def xrt_struct_adjoint(
@@ -238,12 +239,35 @@ def xrt_struct_adjoint(
         assert len(buffer) == math.prod(knot_spec.num)
     # -----------------------------------------------------
 
-    return xrt_adjoint(_rays(ray_spec), knot_spec, order, data, buffer)
+    return xrt_adjoint(struct_rays(ray_spec), knot_spec, order, data, buffer)
 
 
-def _rays(ray_spec: RaySpecT) -> tuple:
-    # All N_proj * L_proj rays, projection-major: ray l = (i, j) with i = l // L_proj,
-    # j = l % L_proj. Lazy: Dr.Jit computes them inside the projector kernel.
+def struct_rays(ray_spec: RaySpecT) -> tuple[ArrayNfT, ArrayNfT]:
+    r"""
+    Individual rays of a structured geometry.
+
+    Returns one ray (anchor :math:`\bbt`, direction :math:`\bbn`) per (projection, detector cell)
+    of a geometry from :py:func:`~xrt_toolkit.parallel_beam` or :py:func:`~xrt_toolkit.cone_beam`,
+    in the order of :py:func:`xrt_struct_apply`'s output. With these rays,
+    :py:func:`~xrt_toolkit.xrt_apply` / :py:func:`~xrt_toolkit.xrt_adjoint` give the same results
+    as :py:func:`xrt_struct_apply` / :py:func:`xrt_struct_adjoint`.
+
+    Parameters
+    ----------
+    ray_spec: tuple[ArrayNNfT, ArrayNNfT, UniformSpec]
+        Structured geometry. (See :py:func:`xrt_struct_apply`.)
+
+    Returns
+    -------
+    ray_spec: tuple[ArrayNfT, ArrayNfT]
+        (L,) ray anchors :math:`\bbt` and directions :math:`\bbn`, ``L = N_proj * prod(ray_u_spec.num)``,
+        projection-major.
+
+    Notes
+    -----
+    The rays are computed lazily: used directly in a projector, they are evaluated inside its kernel
+    and never stored.
+    """
     ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
 
     ArrayNNf = type(ray_t_spec)
@@ -257,7 +281,7 @@ def _rays(ray_spec: RaySpecT) -> tuple:
     N_proj = ray_t_spec.shape[-1]
     L_proj = math.prod(ray_u_spec.num)
     index = dr.arange(UInt, N_proj * L_proj)
-    i, j = index // L_proj, index % L_proj
+    i, j = index // L_proj, index % L_proj  # ray (projection i, detector cell j)
     uu = dr.gather(ArrayNf, uu, j)
     ray_t = dr.gather(ArrayNNf, ray_t_spec, i) @ uu
     ray_n = dr.gather(ArrayNNf, ray_n_spec, i) @ uu

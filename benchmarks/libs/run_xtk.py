@@ -9,7 +9,6 @@ import numpy as np
 from drjit.cuda import Array2f, Array3f, Float
 
 import xrt_toolkit as xtk
-from xrt_toolkit.drjit.struct_xrt import _rays
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import common  # noqa: E402
@@ -28,7 +27,8 @@ def geometry(kind: str, D: int, N: int):
     if kind == "random":  # parallel beam, every ray shifted and tilted at random
         rng = np.random.default_rng(0)
         t, n = (
-            np.array(a, dtype=np.float32) for a in _rays(geometry("parallel", D, N))
+            np.array(a, dtype=np.float32)
+            for a in xtk.struct_rays(geometry("parallel", D, N))
         )
         t += rng.uniform(-0.5, 0.5, t.shape).astype(np.float32)  # +- half a voxel
         n += rng.normal(0, 0.01, n.shape).astype(np.float32)  # ~0.6 deg
@@ -42,7 +42,7 @@ def operators(kind: str, D: int, N: int, order: int = 0, stored: bool = False) -
     knot_spec = xtk.UniformSpec.centered(step=1, num=(N,) * D)
     rays = geometry(kind, D, N)
     if stored and len(rays) == 3:
-        rays = _rays(rays)
+        rays = xtk.struct_rays(rays)
         dr.eval(rays)
     struct = len(rays) == 3
     apply = xtk.xrt_struct_apply if struct else xtk.xrt_apply

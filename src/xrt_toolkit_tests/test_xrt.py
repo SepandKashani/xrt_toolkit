@@ -46,7 +46,8 @@ def knot_spec(request) -> xtk.UniformSpec:
 
 def test_value_apply(knot_spec):
     # order 0, axis-aligned rays through voxel centers.
-    # psi is the normalized box-spline (unit integral), so each voxel contributes step[axis] / prod(step).
+    # psi is the normalized box-spline (unit integral):
+    # each voxel contributes step[axis] / prod(step).
     D = knot_spec.ndim
     rng = np.random.default_rng(0)
     f = rng.standard_normal(knot_spec.num).astype(np.float32)
@@ -85,26 +86,45 @@ def test_math_adjoint(knot_spec, order):
     assert np.isclose(lhs, rhs, rtol=1e-4)
 
 
-@pytest.mark.parametrize("beam", ["parallel", "cone"])
-@pytest.mark.parametrize("order", [0, 1, 2])
-def test_struct_apply(knot_spec, beam, order):
-    # xrt_struct_apply() = xrt_apply() on the rays the structured spec encodes.
-    D = knot_spec.ndim
-    rng = np.random.default_rng(2)
+def struct_spec(D: int, beam: str) -> tuple:
     angles = Float(np.linspace(0, np.pi, 7, endpoint=False, dtype=np.float32))
     detector_spec = xtk.util.DetectorSpec(size=40, num_cell=(11, 9)[: D - 1])
     if beam == "parallel":
-        ray_spec = xtk.parallel_beam(angles, detector_spec)
+        return xtk.parallel_beam(angles, detector_spec)
     else:
-        ray_spec = xtk.cone_beam(30, 60, angles, detector_spec)
-    ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
+        return xtk.cone_beam(30, 60, angles, detector_spec)
 
+
+def explicit_rays(ray_spec: tuple, D: int) -> tuple:
+    # the rays a structured spec encodes, built independently with NumPy
+    ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
     u = [start + step * np.arange(num) for (start, step, num) in ray_u_spec]
     uu = np.stack([c.ravel() for c in np.meshgrid(*u, indexing="ij")])  # (D, L_proj)
     H_t = np.asarray(ray_t_spec)  # (D, D, N_proj)
     H_n = np.asarray(ray_n_spec)
     t = np.einsum("ijk,jl->ikl", H_t, uu).reshape(D, -1)  # (D, N_proj * L_proj)
     n = np.einsum("ijk,jl->ikl", H_n, uu).reshape(D, -1)
+    return t, n
+
+
+@pytest.mark.parametrize("beam", ["parallel", "cone"])
+def test_struct_rays(knot_spec, beam):
+    D = knot_spec.ndim
+    ray_spec = struct_spec(D, beam)
+    t, n = xtk.struct_rays(ray_spec)
+    t_gt, n_gt = explicit_rays(ray_spec, D)
+    assert np.allclose(np.asarray(t), t_gt, atol=1e-5)
+    assert np.allclose(np.asarray(n), n_gt, atol=1e-5)
+
+
+@pytest.mark.parametrize("beam", ["parallel", "cone"])
+@pytest.mark.parametrize("order", [0, 1, 2])
+def test_struct_apply(knot_spec, beam, order):
+    # xrt_struct_apply() = xrt_apply() on the rays the structured spec encodes.
+    D = knot_spec.ndim
+    rng = np.random.default_rng(2)
+    ray_spec = struct_spec(D, beam)
+    t, n = explicit_rays(ray_spec, D)
     ArrayNf = array_t(D)
 
     f = Float(rng.standard_normal(math.prod(knot_spec.num)).astype(np.float32))
@@ -118,13 +138,8 @@ def test_struct_apply(knot_spec, beam, order):
 def test_struct_math_adjoint(knot_spec, beam, order):
     D = knot_spec.ndim
     rng = np.random.default_rng(3)
-    angles = Float(np.linspace(0, np.pi, 7, endpoint=False, dtype=np.float32))
-    detector_spec = xtk.util.DetectorSpec(size=40, num_cell=(11, 9)[: D - 1])
-    if beam == "parallel":
-        ray_spec = xtk.parallel_beam(angles, detector_spec)
-    else:
-        ray_spec = xtk.cone_beam(30, 60, angles, detector_spec)
-    L = 7 * math.prod(detector_spec.num_cell)
+    ray_spec = struct_spec(D, beam)
+    L = 7 * math.prod(ray_spec[2].num)
 
     f = Float(rng.standard_normal(math.prod(knot_spec.num)).astype(np.float32))
     p = Float(rng.standard_normal(L).astype(np.float32))
