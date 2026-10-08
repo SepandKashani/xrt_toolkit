@@ -3,10 +3,12 @@
 | folder | what it measures | results |
 |---|---|---|
 | `speed/` | time of projection and back-projection, XTK and other libraries | [speed.md](speed/speed.md) |
+| `adjoint/` | how far each back-projection is from the exact adjoint of its projection | [adjoint.md](adjoint/adjoint.md) |
 
 Each folder has one script that prints the tables of its page:
 
     python benchmarks/speed/speed.py
+    python benchmarks/adjoint/adjoint.py
 
 The cases (geometries, sizes) are defined once in `common.py`. Each library has a small
 wrapper in `libs/` and runs in its own environment, given by `ASTRA_PYTHON`, `TIGRE_PYTHON`
