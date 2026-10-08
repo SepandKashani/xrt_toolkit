@@ -12,7 +12,6 @@ FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNNfT, ArrayNNfT, xrtu.UniformSpec]
 
 
-@dr.syntax
 def xrt_struct_apply(
     ray_spec: RaySpecT,
     knot_spec: xrtu.UniformSpec,
@@ -132,7 +131,6 @@ def xrt_struct_apply(
     ArrayNNf = type(ray_t_spec)
     ArrayNf = dr.value_t(ArrayNNf)
     Float = dr.value_t(ArrayNf)
-    UInt = dr.value_t(dr.uint32_array_t(ArrayNf))
 
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
@@ -156,35 +154,9 @@ def xrt_struct_apply(
         assert len(buffer) == L
     # -----------------------------------------------------
 
-    u = [None] * D
-    for d, (start, step, num) in enumerate(ray_u_spec):
-        u[d] = start + step * dr.arange(Float, num)
-    uu = ArrayNf(*dr.meshgrid(*u, indexing="ij"))
-
-    i = UInt(0)
-    index = dr.arange(UInt, 0, L_proj)
-    while i < N_proj:
-        H_t = dr.gather(ArrayNNf, ray_t_spec, i)
-        ray_t = H_t @ uu
-
-        H_n = dr.gather(ArrayNNf, ray_n_spec, i)
-        ray_n = H_n @ uu
-
-        proj = xrt_apply(
-            ray_spec=(ray_t, ray_n),
-            knot_spec=knot_spec,
-            order=order,
-            data=data,
-        )
-        dr.scatter(buffer, proj, index)
-
-        i += 1
-        index += L_proj
-
-    return buffer
+    return xrt_apply(_rays(ray_spec), knot_spec, order, data, buffer)
 
 
-@dr.syntax
 def xrt_struct_adjoint(
     ray_spec: RaySpecT,
     knot_spec: xrtu.UniformSpec,
@@ -243,7 +215,6 @@ def xrt_struct_adjoint(
     ArrayNNf = type(ray_t_spec)
     ArrayNf = dr.value_t(ArrayNNf)
     Float = dr.value_t(ArrayNf)
-    UInt = dr.value_t(dr.uint32_array_t(ArrayNf))
 
     # type checking ---------------------------------------
     D = dr.size_v(ArrayNf)
@@ -267,30 +238,27 @@ def xrt_struct_adjoint(
         assert len(buffer) == math.prod(knot_spec.num)
     # -----------------------------------------------------
 
-    u = [None] * D
-    for d, (start, step, num) in enumerate(ray_u_spec):
-        u[d] = start + step * dr.arange(Float, num)
+    return xrt_adjoint(_rays(ray_spec), knot_spec, order, data, buffer)
+
+
+def _rays(ray_spec: RaySpecT) -> tuple:
+    # All N_proj * L_proj rays, projection-major: ray l = (i, j) with i = l // L_proj,
+    # j = l % L_proj. Lazy: Dr.Jit computes them inside the projector kernel.
+    ray_t_spec, ray_n_spec, ray_u_spec = ray_spec
+
+    ArrayNNf = type(ray_t_spec)
+    ArrayNf = dr.value_t(ArrayNNf)
+    Float = dr.value_t(ArrayNf)
+    UInt = dr.value_t(dr.uint32_array_t(ArrayNf))
+
+    u = [start + step * dr.arange(Float, num) for (start, step, num) in ray_u_spec]
     uu = ArrayNf(*dr.meshgrid(*u, indexing="ij"))
 
-    i = UInt(0)
-    index = dr.arange(UInt, 0, L_proj)
-    while i < N_proj:
-        H_t = dr.gather(ArrayNNf, ray_t_spec, i)
-        ray_t = H_t @ uu
-
-        H_n = dr.gather(ArrayNNf, ray_n_spec, i)
-        ray_n = H_n @ uu
-
-        proj = dr.gather(Float, data, index)
-        xrt_adjoint(
-            ray_spec=(ray_t, ray_n),
-            knot_spec=knot_spec,
-            order=order,
-            data=proj,
-            buffer=buffer,
-        )
-
-        i += 1
-        index += L_proj
-
-    return buffer
+    N_proj = ray_t_spec.shape[-1]
+    L_proj = math.prod(ray_u_spec.num)
+    index = dr.arange(UInt, N_proj * L_proj)
+    i, j = index // L_proj, index % L_proj
+    uu = dr.gather(ArrayNf, uu, j)
+    ray_t = dr.gather(ArrayNNf, ray_t_spec, i) @ uu
+    ray_n = dr.gather(ArrayNNf, ray_n_spec, i) @ uu
+    return ray_t, ray_n

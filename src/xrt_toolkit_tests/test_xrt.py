@@ -86,7 +86,8 @@ def test_math_adjoint(knot_spec, order):
 
 
 @pytest.mark.parametrize("beam", ["parallel", "cone"])
-def test_struct_apply(knot_spec, beam):
+@pytest.mark.parametrize("order", [0, 1, 2])
+def test_struct_apply(knot_spec, beam, order):
     # xrt_struct_apply() = xrt_apply() on the rays the structured spec encodes.
     D = knot_spec.ndim
     rng = np.random.default_rng(2)
@@ -107,8 +108,8 @@ def test_struct_apply(knot_spec, beam):
     ArrayNf = array_t(D)
 
     f = Float(rng.standard_normal(math.prod(knot_spec.num)).astype(np.float32))
-    p = xtk.xrt_struct_apply(ray_spec, knot_spec, 0, f)
-    p_gt = xtk.xrt_apply((ArrayNf(t), ArrayNf(n)), knot_spec, 0, f)
+    p = xtk.xrt_struct_apply(ray_spec, knot_spec, order, f)
+    p_gt = xtk.xrt_apply((ArrayNf(t), ArrayNf(n)), knot_spec, order, f)
     assert np.allclose(np.asarray(p), np.asarray(p_gt), atol=1e-4)
 
 
