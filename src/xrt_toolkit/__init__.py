@@ -25,6 +25,10 @@ from .drjit.struct_xrt import (
 from .interop import (
     from_astra as from_astra,
 )
+from .optim import (
+    cg as cg,
+    gd as gd,
+)
 from .util import (
     PolynomialWeightSpec as PolynomialWeightSpec,
     TabulatedWeightSpec as TabulatedWeightSpec,
