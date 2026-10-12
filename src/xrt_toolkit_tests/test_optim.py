@@ -138,3 +138,37 @@ def test_fbp_owns_memory():
     junk = [cupy.full(90 * 96 + k, -777.0, dtype=cupy.float32) for k in range(8)]
     assert np.array_equal(np.asarray(f), f_ref)
     del junk
+
+
+def ball_cone_scan(D: int, N: int, n_det: int) -> tuple:
+    # cone-beam projections (fan beam in 2D) of a disc/ball of value 1 and radius 0.3 N
+    knot_spec = xtk.UniformSpec.centered(step=1, num=(N,) * D)
+    angles = Float(np.linspace(0, 2 * np.pi, 360, endpoint=False, dtype=np.float32))
+    size = (2.2 * N, 1.75 * N)[: D - 1]
+    detector = xtk.util.DetectorSpec(size=size, num_cell=(n_det,) * (D - 1))
+    ray_spec = xtk.cone_beam(1.6 * N, 2.8 * N, angles, detector)
+    x = np.arange(N) - (N - 1) / 2
+    X = np.meshgrid(*(x,) * D, indexing="ij")
+    f = (sum(c**2 for c in X) < (0.3 * N) ** 2).astype(np.float32)
+    y = xtk.xrt_struct_apply(ray_spec, knot_spec, 0, Float(f.ravel()))
+    return ray_spec, knot_spec, y, X
+
+
+def test_fdk_2d():
+    # fan beam: values are right inside the disc, close to 0 outside it
+    N = 128
+    ray_spec, knot_spec, y, (X, Y) = ball_cone_scan(2, N, 256)
+    f = np.asarray(xtk.fdk(ray_spec, knot_spec, y)).reshape(N, N)
+    r = np.sqrt(X**2 + Y**2)
+    assert abs(f[r < 0.2 * N].mean() - 1) < 0.002
+    assert np.sqrt(np.mean(f[(r > 0.35 * N) & (r < 0.45 * N)] ** 2)) < 0.02
+
+
+def test_fdk_3d():
+    # values are right at the center, in the orbit plane, and away from it
+    N = 64
+    ray_spec, knot_spec, y, (X, Y, Z) = ball_cone_scan(3, N, 128)
+    f = np.asarray(xtk.fdk(ray_spec, knot_spec, y)).reshape(N, N, N)
+    for cx, cz, tol in ((0, 0, 0.004), (0.15 * N, 0, 0.006), (0, 0.15 * N, 0.02)):
+        m = (X - cx) ** 2 + Y**2 + (Z - cz) ** 2 < (0.07 * N) ** 2
+        assert abs(f[m].mean() - 1) < tol

@@ -12,9 +12,10 @@ callables, so they work with any operator pair, e.g. :py:func:`~xrt_toolkit.xrt_
    At = lambda y: xtk.xrt_adjoint(ray_spec, knot_spec, order, y)
    f = xtk.cg(A, At, y, math.prod(knot_spec.num))
 
-The analytic method (:py:func:`fbp`) works on the structured scans of
-:py:func:`~xrt_toolkit.parallel_beam`. It filters the projections with FFTs (with CuPy on the
-GPU when it is installed, else with NumPy on the host), then backprojects them voxel by voxel.
+The analytic methods work on structured scans: :py:func:`fbp` on those of
+:py:func:`~xrt_toolkit.parallel_beam`, :py:func:`fdk` on those of
+:py:func:`~xrt_toolkit.cone_beam`. They filter the projections with FFTs (with CuPy on the GPU
+when it is installed, else with NumPy on the host), then backproject them voxel by voxel.
 """
 
 import functools
@@ -185,6 +186,63 @@ def fbp(
     return f * (math.pi * du / n_view)
 
 
+def fdk(
+    ray_spec: RaySpecT,
+    knot_spec: xrtu.UniformSpec,
+    y: FloatT,
+    window: str = "hann",
+) -> FloatT:
+    r"""
+    Filtered backprojection of a cone-beam scan (Feldkamp-Davis-Kress), or of a fan-beam scan
+    in 2D.
+
+    Parameters
+    ----------
+    ray_spec: RaySpecT
+        Scan from :py:func:`~xrt_toolkit.cone_beam`, with views covering :math:`[0, 2\pi)`
+        uniformly.
+    knot_spec: UniformSpec
+        Reconstruction lattice, centered on the rotation axis.
+    y: FloatT
+        (L,) projections, in the order of :py:func:`~xrt_toolkit.xrt_struct_apply`.
+    window: "hann" | "hamming" | "cosine" | "shepp-logan" | "ramp"
+        Apodization of the ramp filter ("ramp": none).
+
+    Returns
+    -------
+    f: FloatT
+        (Q1,...,QD) flattened C-ordered voxel values; 0 outside the field of view.
+
+    Notes
+    -----
+    Exact in the plane of the source orbit; away from it, FDK's usual errors, which grow with
+    the cone angle. As in :py:func:`fbp`, the filter stops at the lattice resolution.
+    """
+    Float = type(y)
+    t_spec, n_spec, u_spec = ray_spec
+    D = knot_spec.ndim
+    n_view = dr.width(t_spec)
+    num, du = u_spec.num[:-1], u_spec.step[:-1]
+    sod = float(np.linalg.norm(np.asarray(t_spec)[:, D - 1, 0]))  # source to axis
+    sdd = float(np.linalg.norm(np.asarray(n_spec)[:, D - 1, 0]))  # source to detector
+
+    # cosine weights, then the ramp filter along the in-plane detector axis
+    xp = _xp(Float)
+    u = np.meshgrid(*[s + d * np.arange(n) for s, d, n in u_spec][:-1], indexing="ij")
+    cos = sdd / np.sqrt(sdd**2 + sum(u_k**2 for u_k in u))
+    q = _to_xp(y, xp).reshape(n_view, *num) * xp.asarray(cos.astype(np.float32))
+    q = xp.moveaxis(q, 1, -1)
+    q = _ramp_filter(
+        q, du[0], window, min(1, du[0] * sod / sdd / min(knot_spec.step[:2])), xp
+    )
+    q = _from_xp(xp.moveaxis(q, -1, 1), Float)
+
+    u_half = abs(u_spec.start[0]) + du[0] / 2  # detector half-width
+    r_fov = sod * u_half / math.hypot(sdd, u_half)
+    f = _backproject(q, ray_spec, knot_spec, r_fov, cone=(sod, sdd))
+    return f * (math.pi * du[0] * sdd / (n_view * sod))
+
+
 # Fourier filtering
 # -----------------
 # CuPy works on the Dr.Jit CUDA arrays in place (DLPack); NumPy copies them to the host.
@@ -278,9 +336,9 @@ def _ramp_filter(
 # Backprojection
 # --------------
 # Voxel-driven, as in ASTRA/TIGRE FBP: each voxel sums the filtered projections, interpolated
-# linearly at the detector position it projects to. (The exact adjoint xrt_adjoint() is the
-# operator for iterative solvers; as an FBP backprojector its chords, nearly tangent to lattice
-# planes, print line artifacts.)
+# linearly at the detector position it projects to (with FDK's distance weight in cone beam).
+# (The exact adjoint xrt_adjoint() is the operator for iterative solvers; as an FBP
+# backprojector its chords, nearly tangent to lattice planes, print line artifacts.)
 
 
 def _backproject(
@@ -288,10 +346,12 @@ def _backproject(
     ray_spec: RaySpecT,
     knot_spec: xrtu.UniformSpec,
     r_fov: float,
+    cone: tuple = None,
 ) -> FloatT:
     # Sum over the views of `q` ((n_view, *detector) projections, flattened) at each voxel's
     # detector position; 0 for voxels farther than r_fov from the rotation axis (z).
-    t_spec, _, u_spec = ray_spec
+    # cone: (sod, sdd) of a cone_beam() scan; None for parallel_beam().
+    t_spec, n_spec, u_spec = ray_spec
     Float = type(q)
     UInt = dr.uint32_array_t(Float)
     Int = dr.int32_array_t(Float)
@@ -300,10 +360,15 @@ def _backproject(
     num_u, u0, du = (u_spec.num[:-1], u_spec.start[:-1], u_spec.step[:-1])
     stride_u = (num_u[1], 1) if (D == 3) else (1,)
 
-    # per view: detector axes and origin (columns of t_spec: t = u_1 d_1 [+ u_2 d_2] + o)
-    T = np.asarray(t_spec)  # (D, D, n_view)
-    axes = [[Float(T[c, k]) for c in range(D)] for k in range(D - 1)]
+    # per view, columns of the specs:
+    #     parallel: t = u_1 d_1 [+ u_2 d_2] + o (rays along n)
+    #     cone:     t = o (source), n = u_1 d_1 [+ u_2 d_2] + sdd c (c: central ray)
+    T, N = np.asarray(t_spec), np.asarray(n_spec)  # (D, D, n_view)
+    axes = [[Float((N if cone else T)[c, k]) for c in range(D)] for k in range(D - 1)]
     origin = [Float(T[c, D - 1]) for c in range(D)]
+    if cone:
+        sod, sdd = cone
+        center = [Float(N[c, D - 1] / sdd) for c in range(D)]
 
     # voxel positions, one lane per voxel (C order)
     idx = dr.arange(UInt, math.prod(knot_spec.num))
@@ -315,9 +380,13 @@ def _backproject(
 
     def body(a, acc):
         v = [x[c] - dr.gather(Float, origin[c], a) for c in range(D)]
+        mag, w_view = 1, 1
+        if cone:  # magnification to the detector, FDK distance weight
+            depth = sum(v[c] * dr.gather(Float, center[c], a) for c in range(D))
+            mag, w_view = sdd / depth, dr.square(sod / depth)
         p, i, ok = [], [], dr.full(dr.mask_t(Float), True, dr.width(acc))
         for k in range(D - 1):
-            u = sum(v[c] * dr.gather(Float, axes[k][c], a) for c in range(D))
+            u = mag * sum(v[c] * dr.gather(Float, axes[k][c], a) for c in range(D))
             p_k = (u - u0[k]) / du[k]
             i_k = Int(dr.floor(p_k))
             ok &= (i_k >= 0) & (i_k < num_u[k] - 1)
@@ -325,7 +394,7 @@ def _backproject(
             i.append(dr.clip(i_k, 0, num_u[k] - 2))
         base = a * math.prod(num_u) + sum(i_k * s for i_k, s in zip(i, stride_u))
         for c in itertools.product((0, 1), repeat=D - 1):
-            w = math.prod(p[k] if c[k] else 1 - p[k] for k in range(D - 1))
+            w = w_view * math.prod(p[k] if c[k] else 1 - p[k] for k in range(D - 1))
             offset = UInt(base + sum(c_k * s for c_k, s in zip(c, stride_u)))
             acc = dr.fma(w, dr.gather(Float, q, offset, ok), acc)
         return a + 1, acc

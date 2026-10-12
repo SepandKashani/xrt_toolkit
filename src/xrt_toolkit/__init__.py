@@ -28,6 +28,7 @@ from .interop import (
 from .optim import (
     cg as cg,
     fbp as fbp,
+    fdk as fdk,
     gd as gd,
 )
 from .util import (
