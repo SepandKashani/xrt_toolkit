@@ -77,7 +77,9 @@ def test_tof_reference(knot_spec):
 
     ArrayNf = Array2f if (D == 2) else Array3f
     tof = xtk.TOFSpec(center=Float(mu), sigma=Float(sigma))
-    p = xtk.xrt_apply((ArrayNf(t), ArrayNf(n)), knot_spec, 0, Float(f.ravel()), tof=tof)
+    p = xtk.xrt_apply(
+        (ArrayNf(t), ArrayNf(n)), knot_spec, 0, Float(f.ravel()), weight=tof
+    )
     p_gt = tof_reference(f, knot_spec, t.astype(np.float64), n, mu, sigma)
     assert np.abs(np.asarray(p) - p_gt).max() < 1e-4 * np.abs(p_gt).max()
 
@@ -99,10 +101,10 @@ def test_tof_adjoint(knot_spec, order):
     ArrayNf = Array2f if (D == 2) else Array3f
     ray_spec = (ArrayNf(t), ArrayNf(n))
     Af = np.asarray(
-        xtk.xrt_apply(ray_spec, knot_spec, order, Float(f), tof=tof), np.float64
+        xtk.xrt_apply(ray_spec, knot_spec, order, Float(f), weight=tof), np.float64
     )
     Atp = np.asarray(
-        xtk.xrt_adjoint(ray_spec, knot_spec, order, Float(p), tof=tof), np.float64
+        xtk.xrt_adjoint(ray_spec, knot_spec, order, Float(p), weight=tof), np.float64
     )
     lhs, rhs = Af @ p.astype(np.float64), f.astype(np.float64) @ Atp
     assert abs(lhs - rhs) < 1e-4 * np.linalg.norm(Af) * np.linalg.norm(p)
@@ -123,7 +125,7 @@ def test_tof_anchor(knot_spec, order):
     for s in (0.0, 7.5):
         tof = xtk.TOFSpec(center=Float(mu - s), sigma=2.0)
         ray_spec = (ArrayNf(t + s * n), ArrayNf(n))
-        out.append(np.asarray(xtk.xrt_apply(ray_spec, knot_spec, order, f, tof=tof)))
+        out.append(np.asarray(xtk.xrt_apply(ray_spec, knot_spec, order, f, weight=tof)))
     assert np.abs(out[1] - out[0]).max() < 1e-4 * np.abs(out[0]).max()
 
 
@@ -181,7 +183,7 @@ def test_tof_3d_splines(order, sigma):
     ray_spec = (Array3f(t.astype(np.float32)), Array3f(n.astype(np.float32)))
     tof = xtk.TOFSpec(center=Float(mu.astype(np.float32)), sigma=sigma)
     p = np.asarray(
-        xtk.xrt_apply(ray_spec, knot_spec, order, Float(vol.ravel()), tof=tof)
+        xtk.xrt_apply(ray_spec, knot_spec, order, Float(vol.ravel()), weight=tof)
     )
     assert np.abs(p - p_gt).max() < 1e-4 * np.abs(p_gt).max()
 
@@ -219,6 +221,6 @@ def test_tof_2d_splines(order):
 
     f = rng.random(Q).astype(np.float32)
     tof = xtk.TOFSpec(center=Float(mu), sigma=sigma)
-    p = np.asarray(xtk.xrt_apply(ray_spec, knot_spec, order, Float(f), tof=tof))
+    p = np.asarray(xtk.xrt_apply(ray_spec, knot_spec, order, Float(f), weight=tof))
     p_gt = (P * g) @ f
     assert np.abs(p - p_gt).max() < 1e-5 * np.abs(p_gt).max()

@@ -18,7 +18,7 @@ from .spline3d import (
     spline3d_stencil,
     spline3d_weights,
 )
-from .tof import tof_window
+from .weight import ray_weight
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -34,7 +34,7 @@ def xrt_apply(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
-    tof: xrtu.TOFSpec = None,
+    weight: xrtu.TOFSpec = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -117,8 +117,10 @@ def xrt_apply(
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
-    tof: TOFSpec
-        Time-of-flight weighting along each ray. (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
+    weight: TOFSpec
+        Weight along each ray: the line integral becomes :math:`\int_{\bR} f(\bbt + \alpha
+        \hat{\bbn}) w(\alpha) d\alpha`, with :math:`\alpha` the arc length from the anchor.
+        (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
 
     Returns
     -------
@@ -161,8 +163,8 @@ def xrt_apply(
         stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
-    if tof is not None:
-        tof_chord, tof_density = tof_window(tof, ray_t, ray_n)
+    if weight is not None:
+        w_chord, w_density = ray_weight(weight, ray_t, ray_n)
 
     if order == 0:
         state = (buffer,)
@@ -179,18 +181,18 @@ def xrt_apply(
 
             offset = dr.dot(index, stride)
             fq = dr.gather(Float, data, offset, active)
-            if tof is None:
+            if weight is None:
                 L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
             else:
                 x_a = bbox_ll + (ArrayNf(index) + p_a) * knot_step
                 x_b = bbox_ll + (ArrayNf(index) + p_b) * knot_step
-                L = tof_chord(x_a, x_b) * dr.rcp(dr.prod(knot_step))
+                L = w_chord(x_a, x_b) * dr.rcp(dr.prod(knot_step))
             accum += fq * L
 
             return (accum,), Bool(True)
 
     elif D == 2:
-        return spline2d_apply((ray_t, ray_n), knot_spec, order, data, buffer, tof)
+        return spline2d_apply((ray_t, ray_n), knot_spec, order, data, buffer, weight)
 
     elif (D == 3) and (order > 0):
         # walk the grid of polynomial pieces (covers every basis support).
@@ -209,10 +211,10 @@ def xrt_apply(
             # exact ray/cell projections of the (order + 1)**3 basis functions.
             (accum,) = state
 
-            g = None  # TOF window at the quadrature nodes
-            if tof is not None:
+            g = None  # weight at the quadrature nodes
+            if weight is not None:
                 x = spline3d_nodes(order, index, p_a, p_b, bbox_ll, knot_step)
-                g = [tof_density(_x) for _x in x]
+                g = [w_density(_x) for _x in x]
             for offset, valid, L in spline3d_stencil(
                 order, index, p_a, p_b, knot_step, knot_num, stride, g
             ):
@@ -254,7 +256,7 @@ def xrt_adjoint(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
-    tof: xrtu.TOFSpec = None,
+    weight: xrtu.TOFSpec = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D back-projections.
@@ -276,8 +278,10 @@ def xrt_adjoint(
         (L,) projections :math:`g_{l} \in \bR`.
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
-    tof: TOFSpec
-        Time-of-flight weighting along each ray. (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
+    weight: TOFSpec
+        Weight along each ray: the line integral becomes :math:`\int_{\bR} f(\bbt + \alpha
+        \hat{\bbn}) w(\alpha) d\alpha`, with :math:`\alpha` the arc length from the anchor.
+        (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
 
     Returns
     -------
@@ -320,8 +324,8 @@ def xrt_adjoint(
         stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
-    if tof is not None:
-        tof_chord, tof_density = tof_window(tof, ray_t, ray_n)
+    if weight is not None:
+        w_chord, w_density = ray_weight(weight, ray_t, ray_n)
 
     if order == 0:
         state = (buffer,)
@@ -337,18 +341,18 @@ def xrt_adjoint(
             (accum,) = state
 
             offset = dr.dot(index, stride)
-            if tof is None:
+            if weight is None:
                 L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
             else:
                 x_a = bbox_ll + (ArrayNf(index) + p_a) * knot_step
                 x_b = bbox_ll + (ArrayNf(index) + p_b) * knot_step
-                L = tof_chord(x_a, x_b) * dr.rcp(dr.prod(knot_step))
+                L = w_chord(x_a, x_b) * dr.rcp(dr.prod(knot_step))
             dr.scatter_add(accum, L * data, offset, active, mode=dr.ReduceMode.Direct)
 
             return (accum,), Bool(True)
 
     elif D == 2:
-        return spline2d_adjoint((ray_t, ray_n), knot_spec, order, data, buffer, tof)
+        return spline2d_adjoint((ray_t, ray_n), knot_spec, order, data, buffer, weight)
 
     elif (D == 3) and (order > 0):
         # walk the grid of polynomial pieces (covers every basis support).
@@ -384,10 +388,10 @@ def xrt_adjoint(
                 data,
                 buffer,
             )
-            g = None  # TOF window at the quadrature nodes
-            if tof is not None:
+            g = None  # weight at the quadrature nodes
+            if weight is not None:
                 x = spline3d_nodes(order, index, p_a, p_b, bbox_ll, knot_step)
-                g = [tof_density(_x) for _x in x]
+                g = [w_density(_x) for _x in x]
             L = spline3d_weights(
                 order,
                 spline3d_mirror(fwd, p_a),

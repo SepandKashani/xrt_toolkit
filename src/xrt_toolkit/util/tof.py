@@ -4,9 +4,9 @@ from dataclasses import dataclass
 @dataclass
 class TOFSpec:
     r"""
-    Time-of-flight (TOF) weighting along each ray.
+    Time-of-flight (TOF) weight along each ray, a Gaussian.
 
-    With TOF, :py:func:`~xrt_toolkit.xrt_apply` computes
+    As `weight` of :py:func:`~xrt_toolkit.xrt_apply`, it gives
 
     .. math::
 
