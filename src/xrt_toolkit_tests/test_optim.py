@@ -58,3 +58,83 @@ def test_cg_reconstruction():
     At = lambda y: xtk.xrt_struct_adjoint(ray_spec, knot_spec, 0, y)  # noqa: E731
     f = np.asarray(xtk.cg(A, At, A(Float(f_gt)), N * N, n_iter=50))
     assert np.sqrt(np.mean((f - f_gt) ** 2)) < 0.02
+
+
+def disc_scan(D: int, N: int, n_view: int, n_det: int, size: float) -> tuple:
+    # parallel-beam projections of a disc (2D) or ball (3D) of value 1 and radius N/3
+    knot_spec = xtk.UniformSpec.centered(step=1, num=(N,) * D)
+    angles = Float(np.linspace(0, np.pi, n_view, endpoint=False, dtype=np.float32))
+    detector = xtk.util.DetectorSpec(
+        size=(size,) * (D - 1), num_cell=(n_det,) * (D - 1)
+    )
+    ray_spec = xtk.parallel_beam(angles, detector)
+    x = np.arange(N) - (N - 1) / 2
+    r = np.sqrt(sum(c**2 for c in np.meshgrid(*(x,) * D, indexing="ij")))
+    f = (r < N / 3).astype(np.float32)
+    y = xtk.xrt_struct_apply(ray_spec, knot_spec, 0, Float(f.ravel()))
+    return ray_spec, knot_spec, y, r
+
+
+@pytest.mark.parametrize("window", ["hann", "hamming", "cosine", "shepp-logan", "ramp"])
+def test_fbp_2d(window):
+    # values are right inside the disc, close to 0 outside it (sharp windows ring more)
+    N = 128
+    ray_spec, knot_spec, y, r = disc_scan(2, N, 180, 192, 192)
+    f = np.asarray(xtk.fbp(ray_spec, knot_spec, y, window)).reshape(N, N)
+    assert abs(f[r < N / 4].mean() - 1) < 0.01
+    assert np.sqrt(np.mean(f[r > N / 2.5] ** 2)) < 0.02
+
+
+@pytest.mark.parametrize("n_det", [48, 192])
+def test_fbp_3d(n_det):
+    # each detector row reconstructs one slice (also with 4 detector cells per voxel)
+    N = 48
+    ray_spec, knot_spec, y, r = disc_scan(3, N, 90, n_det, 1.5 * N)
+    f = np.asarray(xtk.fbp(ray_spec, knot_spec, y)).reshape(N, N, N)
+    assert abs(f[r < N / 4].mean() - 1) < 0.02
+
+
+def test_fbp_fine_detector():
+    # with noisy data, a detector finer than the lattice is not worse than a matched one
+    N = 64
+    err = []
+    for n_det in (96, 384):
+        ray_spec, knot_spec, y, r = disc_scan(2, N, 180, n_det, 96)
+        y = np.asarray(y)
+        noise = 0.05 * y.max() * np.random.default_rng(0).standard_normal(len(y))
+        f = xtk.fbp(ray_spec, knot_spec, Float((y + noise).astype(np.float32)))
+        f = np.asarray(f).reshape(N, N)
+        err.append(np.sqrt(np.mean((f - (r < N / 3))[r < N / 2.2] ** 2)))
+    assert err[1] < 1.1 * err[0]
+
+
+def test_fbp_window_error():
+    ray_spec, knot_spec, y, _ = disc_scan(2, 16, 8, 24, 24)
+    with pytest.raises(ValueError):
+        xtk.fbp(ray_spec, knot_spec, y, window="box")
+
+
+def test_fbp_numpy(monkeypatch):
+    # FFTs with NumPy on the host give the same result as with CuPy on the GPU
+    import xrt_toolkit.optim as optim
+
+    ray_spec, knot_spec, y, _ = disc_scan(2, 64, 90, 96, 96)
+    f = np.asarray(xtk.fbp(ray_spec, knot_spec, y))
+    monkeypatch.setattr(optim, "_xp", lambda Float: np)
+    f_np = np.asarray(xtk.fbp(ray_spec, knot_spec, y))
+    assert np.abs(f - f_np).max() < 1e-5 * np.abs(f).max()
+
+
+def test_fbp_owns_memory():
+    # the result stays right after CuPy reuses the memory of its temporaries
+    import xrt_toolkit.optim as optim
+
+    cupy = optim._cupy() if (dr.backend_v(Float) == dr.JitBackend.CUDA) else None
+    if cupy is None:
+        pytest.skip("no CuPy")
+    ray_spec, knot_spec, y, _ = disc_scan(2, 64, 90, 96, 96)
+    f_ref = np.asarray(xtk.fbp(ray_spec, knot_spec, y))
+    f = xtk.fbp(ray_spec, knot_spec, y)  # not evaluated yet
+    junk = [cupy.full(90 * 96 + k, -777.0, dtype=cupy.float32) for k in range(8)]
+    assert np.array_equal(np.asarray(f), f_ref)
+    del junk
