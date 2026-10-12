@@ -23,6 +23,7 @@ from .interop import (
     from_astra as from_astra,
 )
 from .util import (
+    TOFSpec as TOFSpec,
     UniformSpec as UniformSpec,
     asarray as asarray,
 )

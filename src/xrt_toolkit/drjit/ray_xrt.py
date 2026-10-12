@@ -26,12 +26,38 @@ FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
 
 
+def _tof_chord_weight(
+    tof: xrtu.TOFSpec,
+    ray_t: ArrayNfT,
+    ray_n: ArrayNfT,
+    bbox_ll: ArrayNfT,
+    knot_step: ArrayNfT,
+):
+    # Integral of the TOF Gaussian over the chord [p_a, p_b] of cell `index` (order 0).
+    # The arc length is measured from the user's anchor `ray_t` along the unit direction.
+    Float = dr.value_t(type(ray_t))
+    mu = Float(tof.center)
+    r_sigma = dr.rcp(Float(tof.sigma) * math.sqrt(2))
+    n_hat = dr.normalize(ray_n)
+
+    def alpha(p: ArrayNfT) -> FloatT:  # arc length of grid position p (in cells)
+        return dr.dot(bbox_ll + p * knot_step - ray_t, n_hat)
+
+    def weight(index: ArrayNfT, p_a: ArrayNfT, p_b: ArrayNfT) -> FloatT:
+        z_a = (alpha(index + p_a) - mu) * r_sigma
+        z_b = (alpha(index + p_b) - mu) * r_sigma
+        return 0.5 * dr.abs(dr.erf(z_b) - dr.erf(z_a))
+
+    return weight
+
+
 def xrt_apply(
     ray_spec: RaySpecT,
     knot_spec: xrtu.UniformSpec,
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+    tof: xrtu.TOFSpec = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -114,6 +140,8 @@ def xrt_apply(
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
+    tof: TOFSpec
+        Time-of-flight weighting along each ray (order 0). (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
 
     Returns
     -------
@@ -134,6 +162,8 @@ def xrt_apply(
 
     assert knot_spec.ndim == D
     assert order in (0, 1, 2)
+    if (tof is not None) and (order > 0):
+        raise NotImplementedError("tof: only order 0 is supported.")
 
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
@@ -156,6 +186,8 @@ def xrt_apply(
         stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
+    if tof is not None:
+        tof_weight = _tof_chord_weight(tof, ray_t, ray_n, bbox_ll, knot_step)
 
     if order == 0:
         state = (buffer,)
@@ -172,7 +204,10 @@ def xrt_apply(
 
             offset = dr.dot(index, stride)
             fq = dr.gather(Float, data, offset, active)
-            L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            if tof is None:
+                L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            else:
+                L = tof_weight(ArrayNf(index), p_a, p_b) * dr.rcp(dr.prod(knot_step))
             accum += fq * L
 
             return (accum,), Bool(True)
@@ -239,6 +274,7 @@ def xrt_adjoint(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+    tof: xrtu.TOFSpec = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D back-projections.
@@ -260,6 +296,8 @@ def xrt_adjoint(
         (L,) projections :math:`g_{l} \in \bR`.
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
+    tof: TOFSpec
+        Time-of-flight weighting along each ray (order 0). (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
 
     Returns
     -------
@@ -280,6 +318,8 @@ def xrt_adjoint(
 
     assert knot_spec.ndim == D
     assert order in (0, 1, 2)
+    if (tof is not None) and (order > 0):
+        raise NotImplementedError("tof: only order 0 is supported.")
 
     L = max(ray_t.shape[1], ray_n.shape[1])
     assert type(data) is Float
@@ -302,6 +342,8 @@ def xrt_adjoint(
         stride = ArrayNu(knot_num.y, 1)
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
+    if tof is not None:
+        tof_weight = _tof_chord_weight(tof, ray_t, ray_n, bbox_ll, knot_step)
 
     if order == 0:
         state = (buffer,)
@@ -317,7 +359,10 @@ def xrt_adjoint(
             (accum,) = state
 
             offset = dr.dot(index, stride)
-            L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            if tof is None:
+                L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
+            else:
+                L = tof_weight(ArrayNf(index), p_a, p_b) * dr.rcp(dr.prod(knot_step))
             dr.scatter_add(accum, L * data, offset, active, mode=dr.ReduceMode.Direct)
 
             return (accum,), Bool(True)
