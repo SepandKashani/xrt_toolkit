@@ -67,6 +67,14 @@ def _blend(order: int, u: ArrayNfT) -> list[ArrayNfT]:
         return [0.5 * dr.square(1 - u), dr.fma(u, 1 - u, 0.5), 0.5 * dr.square(u)]
 
 
+def _blend_d(order: int, u: ArrayNfT) -> list[ArrayNfT]:
+    # Derivatives of _blend() in u.
+    if order == 1:
+        return [-dr.ones(type(u)), dr.ones(type(u))]
+    elif order == 2:
+        return [u - 1, 1 - 2 * u, u]
+
+
 def spline3d_grid(
     knot_start: ArrayNfT,
     knot_step: ArrayNfT,
@@ -216,8 +224,27 @@ def spline3d_stencil(
         * valid: basis function lies inside the lattice;
         * weight: line integral of the basis function over the segment, divided by :math:`\prod_{d} \Delta_{d}`.
     """
-    ArrayNi = dr.int32_array_t(type(p_a))
-    UInt = dr.uint32_array_t(dr.value_t(type(p_a)))
+    weights = spline3d_weights(order, p_a, p_b, knot_step, node_scale)
+    return [
+        (offset, valid, w)
+        for (offset, valid), w in zip(
+            spline3d_cell_basis(order, index, knot_num, stride), weights
+        )
+    ]
+
+
+def spline3d_cell_basis(
+    order: int,
+    index: ArrayNuT,
+    knot_num: ArrayNuT,
+    stride: ArrayNuT,
+) -> list[tuple[UIntT, BoolT]]:
+    r"""
+    (offset, valid) of the :math:`(k+1)^{3}` basis functions overlapping one traversed cell, C-ordered as in
+    :py:func:`spline3d_weights`. (See :py:func:`spline3d_stencil`.)
+    """
+    ArrayNi = dr.int32_array_t(type(index))
+    UInt = dr.value_t(type(index))
     K = order + 1
 
     # traversal cell i <-> basis functions i - k + c, c = 0..k
@@ -229,13 +256,108 @@ def spline3d_stencil(
         ax_valid.append([(_q >= 0) & (_q < num[d]) for _q in q])
         ax_offset.append([UInt(dr.clip(_q, 0, num[d] - 1)) * stride[d] for _q in q])
 
-    weights = spline3d_weights(order, p_a, p_b, knot_step, node_scale)
-    stencil = []
-    for (c1, c2, c3), w in zip(itertools.product(range(K), repeat=3), weights):
-        offset = ax_offset[0][c1] + ax_offset[1][c2] + ax_offset[2][c3]
-        valid = ax_valid[0][c1] & ax_valid[1][c2] & ax_valid[2][c3]
-        stencil.append((offset, valid, w))
-    return stencil
+    return [
+        (
+            ax_offset[0][c1] + ax_offset[1][c2] + ax_offset[2][c3],
+            ax_valid[0][c1] & ax_valid[1][c2] & ax_valid[2][c3],
+        )
+        for (c1, c2, c3) in itertools.product(range(K), repeat=3)
+    ]
+
+
+def spline3d_coeffs(
+    order: int,
+    index: ArrayNuT,
+    knot_num: ArrayNuT,
+    stride: ArrayNuT,
+    data: FloatT,
+    active: BoolT,
+) -> list[FloatT]:
+    r"""
+    Coefficients of the :math:`(k+1)^{3}` basis functions overlapping one traversed cell (0 outside the
+    lattice), C-ordered as in :py:func:`spline3d_weights`.
+    """
+    Float = type(data)
+    return [
+        dr.gather(Float, data, offset, valid & active)
+        for offset, valid in spline3d_cell_basis(order, index, knot_num, stride)
+    ]
+
+
+def spline3d_grad(
+    order: int,
+    p_a: ArrayNfT,
+    p_b: ArrayNfT,
+    knot_step: ArrayNfT,
+    coeffs: list[FloatT],
+) -> tuple[ArrayNfT, ArrayNfT]:
+    r"""
+    Line integrals of the gradient of the field over one traversed cell.
+
+    With :math:`F = \sum_{c} f_{c} \psi_{c} / \prod_{d} \Delta_{d}` the field on the cell and
+    :math:`\tau \in [0, \ell]` the arc length from the cell entry, returns
+
+    .. math::
+
+       G_{0} = \int_{0}^{\ell} \nabla F \, d\tau,
+       \qquad
+       G_{1} = \int_{0}^{\ell} \tau \nabla F \, d\tau.
+
+    Along the ray, :math:`\nabla F` is a polynomial of degree :math:`3k - 1`: the ``NODES`` rule is exact for
+    both.
+
+    Parameters
+    ----------
+    order: 1 | 2
+    p_a, p_b: ArrayNfT
+        (3,) fractional entry/exit positions in the cell.
+    knot_step: ArrayNfT
+        (3,) lattice step.
+    coeffs: list[FloatT]
+        (k+1)**3 coefficients :math:`f_{c}`. (See :py:func:`spline3d_coeffs`.)
+
+    Returns
+    -------
+    G0, G1: ArrayNfT
+    """
+    ArrayNf = type(p_a)
+    nodes, weights = NODES[order]
+    K = order + 1
+
+    seg = p_b - p_a
+    ell = dr.norm(seg * knot_step)
+    rcp_step = dr.rcp(knot_step)
+    scale = ell * dr.rcp(dr.prod(knot_step))
+    f = [
+        [coeffs[(c1 * K + c2) * K : (c1 * K + c2 + 1) * K] for c2 in range(K)]
+        for c1 in range(K)
+    ]
+
+    G0 = dr.zeros(ArrayNf, dr.width(ell))
+    G1 = dr.zeros(ArrayNf, dr.width(ell))
+    for s, w in zip(nodes, weights):
+        u = dr.fma(seg, s, p_a)
+        B, dB = _blend(order, u), _blend_d(order, u)
+        # contract the tensor of coefficients axis by axis (z, then y, then x)
+        T_z = [
+            [sum(f[c1][c2][c3] * B[c3].z for c3 in range(K)) for c2 in range(K)]
+            for c1 in range(K)
+        ]
+        T_dz = [
+            [sum(f[c1][c2][c3] * dB[c3].z for c3 in range(K)) for c2 in range(K)]
+            for c1 in range(K)
+        ]
+        T_yz = [sum(T_z[c1][c2] * B[c2].y for c2 in range(K)) for c1 in range(K)]
+        T_dyz = [sum(T_z[c1][c2] * dB[c2].y for c2 in range(K)) for c1 in range(K)]
+        T_ydz = [sum(T_dz[c1][c2] * B[c2].y for c2 in range(K)) for c1 in range(K)]
+        g = ArrayNf(
+            sum(T_yz[c1] * dB[c1].x for c1 in range(K)),
+            sum(T_dyz[c1] * B[c1].x for c1 in range(K)),
+            sum(T_ydz[c1] * B[c1].x for c1 in range(K)),
+        ) * (rcp_step * (w * scale))
+        G0 += g
+        G1 = dr.fma(s * ell, g, G1)
+    return G0, G1
 
 
 def _offset(q: ArrayNiT, knot_num: ArrayNuT, stride: ArrayNuT) -> tuple[UIntT, BoolT]:
