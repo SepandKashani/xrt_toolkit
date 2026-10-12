@@ -18,7 +18,7 @@ from .spline3d import (
     spline3d_stencil,
     spline3d_weights,
 )
-from .weight import ray_weight
+from .weight import WeightT, ray_weight
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -34,7 +34,7 @@ def xrt_apply(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
-    weight: xrtu.TOFSpec = None,
+    weight: WeightT = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D projections.
@@ -117,10 +117,11 @@ def xrt_apply(
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
-    weight: TOFSpec
+    weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec
         Weight along each ray: the line integral becomes :math:`\int_{\bR} f(\bbt + \alpha
         \hat{\bbn}) w(\alpha) d\alpha`, with :math:`\alpha` the arc length from the anchor.
-        (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
+        (See :py:class:`~xrt_toolkit.util.TOFSpec`, :py:class:`~xrt_toolkit.util.PolynomialWeightSpec`,
+        :py:class:`~xrt_toolkit.util.TabulatedWeightSpec`.)
 
     Returns
     -------
@@ -256,7 +257,7 @@ def xrt_adjoint(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
-    weight: xrtu.TOFSpec = None,
+    weight: WeightT = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D back-projections.
@@ -278,10 +279,11 @@ def xrt_adjoint(
         (L,) projections :math:`g_{l} \in \bR`.
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
-    weight: TOFSpec
+    weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec
         Weight along each ray: the line integral becomes :math:`\int_{\bR} f(\bbt + \alpha
         \hat{\bbn}) w(\alpha) d\alpha`, with :math:`\alpha` the arc length from the anchor.
-        (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
+        (See :py:class:`~xrt_toolkit.util.TOFSpec`, :py:class:`~xrt_toolkit.util.PolynomialWeightSpec`,
+        :py:class:`~xrt_toolkit.util.TabulatedWeightSpec`.)
 
     Returns
     -------

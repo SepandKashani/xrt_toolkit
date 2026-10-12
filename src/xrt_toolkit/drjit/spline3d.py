@@ -51,8 +51,9 @@ NODES = {
     1: _gauss_legendre(2),
     2: _gauss_legendre(4),
 }
-# With a TOF window (not a polynomial): float32-accurate for sigma >= 1 voxel.
-TOF_NODES = {
+# With a weight along the ray: exact for polynomial weights up to degree 11 - 3k; float32-accurate
+# for TOF with sigma >= 1 voxel.
+WEIGHT_NODES = {
     1: _gauss_legendre(6),
     2: _gauss_legendre(6),
 }
@@ -100,7 +101,7 @@ def spline3d_nodes(
     knot_step: ArrayNfT,
 ) -> list[ArrayNfT]:
     r"""
-    World positions of the TOF quadrature nodes (``TOF_NODES``) in one cell.
+    World positions of the quadrature nodes (``WEIGHT_NODES``) in one cell.
 
     Parameters
     ----------
@@ -120,7 +121,7 @@ def spline3d_nodes(
         (3,) node positions.
     """
     ArrayNf = type(p_a)
-    nodes, _ = TOF_NODES[order]
+    nodes, _ = WEIGHT_NODES[order]
     return [
         grid_ll + (ArrayNf(index) + dr.fma(p_b - p_a, s, p_a)) * knot_step
         for s in nodes
@@ -145,8 +146,8 @@ def spline3d_weights(
     knot_step: ArrayNfT
         (3,) lattice step.
     node_scale: list[FloatT]
-        Optional TOF window at the nodes of :py:func:`spline3d_nodes`. The integral then
-        uses the ``TOF_NODES`` rule.
+        Optional weight along the ray at the nodes of :py:func:`spline3d_nodes`. The integral then
+        uses the ``WEIGHT_NODES`` rule.
 
     Returns
     -------
@@ -155,8 +156,8 @@ def spline3d_weights(
         (cell-relative index :math:`c \in \{0, \ldots, k\}^{3}`, C-ordered).
     """
     nodes, weights = NODES[order]
-    if node_scale is not None:  # TOF window: finer rule
-        nodes, weights = TOF_NODES[order]
+    if node_scale is not None:  # weight along the ray: finer rule
+        nodes, weights = WEIGHT_NODES[order]
         weights = [w * g for (w, g) in zip(weights, node_scale)]
     K = order + 1
 

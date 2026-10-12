@@ -37,7 +37,7 @@ import xrt_toolkit.util as xrtu
 
 from .bbox import ray_bbox_intersect
 from .box_spline import box_spline_1d_E
-from .weight import ray_weight
+from .weight import WeightT, ray_weight
 
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
 FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
@@ -138,7 +138,7 @@ def _setup(
     knot_spec: xrtu.UniformSpec,
     order: int,
     transpose: bool,
-    weight: xrtu.TOFSpec = None,
+    weight: WeightT = None,
 ) -> dict:
     # Per-ray walk constants. Entry/exit columns replicate xrt_apply()'s rewind and
     # dda()'s set-up, so the (ray, basis function) pairs are those of the cell walk.
@@ -371,7 +371,7 @@ def spline2d_apply(
     order: int,
     data: FloatT,
     buffer: FloatT,
-    weight: xrtu.TOFSpec = None,
+    weight: WeightT = None,
 ) -> FloatT:
     r"""
     2D projections at order 1 or 2.
@@ -396,7 +396,7 @@ def spline2d_adjoint(
     order: int,
     data: FloatT,
     buffer: FloatT,
-    weight: xrtu.TOFSpec = None,
+    weight: WeightT = None,
 ) -> FloatT:
     r"""
     Adjoint of :py:func:`spline2d_apply`.

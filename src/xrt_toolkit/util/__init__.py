@@ -14,6 +14,10 @@ from .misc import (
 from .tof import (
     TOFSpec as TOFSpec,
 )
+from .weight import (
+    PolynomialWeightSpec as PolynomialWeightSpec,
+    TabulatedWeightSpec as TabulatedWeightSpec,
+)
 from .type_traits import (
     int_array_t as int_array_t,
     uint_array_t as uint_array_t,

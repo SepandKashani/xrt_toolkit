@@ -23,6 +23,8 @@ from .interop import (
     from_astra as from_astra,
 )
 from .util import (
+    PolynomialWeightSpec as PolynomialWeightSpec,
+    TabulatedWeightSpec as TabulatedWeightSpec,
     TOFSpec as TOFSpec,
     UniformSpec as UniformSpec,
     asarray as asarray,
