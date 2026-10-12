@@ -6,6 +6,7 @@ import drjit as dr
 import xrt_toolkit.util as xrtu
 
 from .ray_xrt import xrt_adjoint, xrt_apply
+from .weight import WeightT
 
 ArrayNNfT = typ.TypeVar("ArrayNNfT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -19,6 +20,7 @@ def xrt_struct_apply(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+    weight: WeightT = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D structured projections.
@@ -121,6 +123,9 @@ def xrt_struct_apply(
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
         The (N_proj, *ray_u_spec.num) mesh-points are serialized in C-order.
+    weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec
+        Weight along each ray (see :py:func:`~xrt_toolkit.xrt_apply`), per ray in the order of the
+        projections. Arc lengths are measured from the anchors of :py:func:`struct_rays`.
 
     Returns
     -------
@@ -155,7 +160,7 @@ def xrt_struct_apply(
         assert len(buffer) == L
     # -----------------------------------------------------
 
-    return xrt_apply(struct_rays(ray_spec), knot_spec, order, data, buffer)
+    return xrt_apply(struct_rays(ray_spec), knot_spec, order, data, buffer, weight)
 
 
 def xrt_struct_adjoint(
@@ -164,6 +169,7 @@ def xrt_struct_adjoint(
     order: int,
     data: FloatT,
     buffer: FloatT = None,
+    weight: WeightT = None,
 ) -> FloatT:
     r"""
     Compute 2D/3D structured back-projections.
@@ -205,6 +211,8 @@ def xrt_struct_adjoint(
         The (N_proj, *ray_u_spec.num) mesh-points are serialized in C-order.
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
+    weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec
+        Weight along each ray. (See :py:func:`xrt_struct_apply`.)
 
     Returns
     -------
@@ -239,7 +247,7 @@ def xrt_struct_adjoint(
         assert len(buffer) == math.prod(knot_spec.num)
     # -----------------------------------------------------
 
-    return xrt_adjoint(struct_rays(ray_spec), knot_spec, order, data, buffer)
+    return xrt_adjoint(struct_rays(ray_spec), knot_spec, order, data, buffer, weight)
 
 
 def struct_rays(ray_spec: RaySpecT) -> tuple[ArrayNfT, ArrayNfT]:

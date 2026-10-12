@@ -6,6 +6,7 @@ import pytest
 
 import xrt_toolkit as xtk
 from xrt_toolkit_tests.test_tof import GL_W, GL_X, KNOTS, beta, rays
+from xrt_toolkit_tests.test_xrt import explicit_rays, struct_spec
 
 try:
     from drjit.cuda import Array2f, Array3f, Float
@@ -282,3 +283,30 @@ def test_weight_adjoint(knot_spec, order, kind):
     Af, Atp = np.asarray(Af, np.float64), np.asarray(Atp, np.float64)
     lhs, rhs = Af @ p.astype(np.float64), f.astype(np.float64) @ Atp
     assert abs(lhs - rhs) < 1e-4 * np.linalg.norm(Af) * np.linalg.norm(p)
+
+
+@pytest.mark.parametrize("beam", ["parallel", "cone"])
+@pytest.mark.parametrize("order", [0, 1, 2])
+def test_struct_weight(knot_spec, beam, order):
+    # xrt_struct_apply/adjoint() with a weight = xrt_apply/adjoint() on the same rays.
+    D = knot_spec.ndim
+    rng = np.random.default_rng(7)
+    ray_spec = struct_spec(D, beam)
+    t, n = explicit_rays(ray_spec, D)
+    rays_l = (array_t(D)(t.astype(np.float32)), array_t(D)(n.astype(np.float32)))
+    # TOF centers near the volume center along each ray
+    L = t.shape[1]
+    lo = np.array(knot_spec.start)
+    c = lo + 0.5 * np.array(knot_spec.step) * (np.array(knot_spec.num) - 1)
+    alpha_c = np.sum((c[:, None] - t) * n, axis=0) / np.linalg.norm(n, axis=0)
+    mu = alpha_c + rng.uniform(-2, 2, L)
+    tof = xtk.TOFSpec(center=Float(mu.astype(np.float32)), sigma=2.0)
+    f = Float(rng.standard_normal(math.prod(knot_spec.num)).astype(np.float32))
+    p = Float(rng.standard_normal(L).astype(np.float32))
+
+    Af = np.asarray(xtk.xrt_struct_apply(ray_spec, knot_spec, order, f, weight=tof))
+    Af_gt = np.asarray(xtk.xrt_apply(rays_l, knot_spec, order, f, weight=tof))
+    assert np.abs(Af - Af_gt).max() < 1e-4 * np.abs(Af_gt).max()
+    Atp = np.asarray(xtk.xrt_struct_adjoint(ray_spec, knot_spec, order, p, weight=tof))
+    Atp_gt = np.asarray(xtk.xrt_adjoint(rays_l, knot_spec, order, p, weight=tof))
+    assert np.abs(Atp - Atp_gt).max() < 1e-4 * np.abs(Atp_gt).max()
