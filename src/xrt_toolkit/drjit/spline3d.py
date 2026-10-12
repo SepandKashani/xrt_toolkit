@@ -51,6 +51,11 @@ NODES = {
     1: _gauss_legendre(2),
     2: _gauss_legendre(4),
 }
+# With a TOF window (not a polynomial): float32-accurate for sigma >= 1 voxel.
+TOF_NODES = {
+    1: _gauss_legendre(6),
+    2: _gauss_legendre(6),
+}
 
 
 def _blend(order: int, u: ArrayNfT) -> list[ArrayNfT]:
@@ -86,11 +91,48 @@ def spline3d_grid(
     return grid_ll, grid_ur, grid_res
 
 
+def spline3d_nodes(
+    order: int,
+    index: ArrayNuT,
+    p_a: ArrayNfT,
+    p_b: ArrayNfT,
+    grid_ll: ArrayNfT,
+    knot_step: ArrayNfT,
+) -> list[ArrayNfT]:
+    r"""
+    World positions of the TOF quadrature nodes (``TOF_NODES``) in one cell.
+
+    Parameters
+    ----------
+    order: 1 | 2
+    index: ArrayNuT
+        (3,) cell index on the grid of :py:func:`spline3d_grid`.
+    p_a, p_b: ArrayNfT
+        (3,) fractional entry/exit positions in the cell.
+    grid_ll: ArrayNfT
+        (3,) lower corner of the grid of :py:func:`spline3d_grid`.
+    knot_step: ArrayNfT
+        (3,) lattice step.
+
+    Returns
+    -------
+    x: list[ArrayNfT]
+        (3,) node positions.
+    """
+    ArrayNf = type(p_a)
+    nodes, _ = TOF_NODES[order]
+    return [
+        grid_ll + (ArrayNf(index) + dr.fma(p_b - p_a, s, p_a)) * knot_step
+        for s in nodes
+    ]
+
+
 def spline3d_weights(
     order: int,
     p_a: ArrayNfT,
     p_b: ArrayNfT,
     knot_step: ArrayNfT,
+    node_scale: list[FloatT] = None,
 ) -> list[FloatT]:
     r"""
     Line integrals of the :math:`(k+1)^{3}` basis functions overlapping one traversed cell.
@@ -102,6 +144,9 @@ def spline3d_weights(
         (3,) fractional entry/exit positions in the cell.
     knot_step: ArrayNfT
         (3,) lattice step.
+    node_scale: list[FloatT]
+        Optional TOF window at the nodes of :py:func:`spline3d_nodes`. The integral then
+        uses the ``TOF_NODES`` rule.
 
     Returns
     -------
@@ -110,6 +155,9 @@ def spline3d_weights(
         (cell-relative index :math:`c \in \{0, \ldots, k\}^{3}`, C-ordered).
     """
     nodes, weights = NODES[order]
+    if node_scale is not None:  # TOF window: finer rule
+        nodes, weights = TOF_NODES[order]
+        weights = [w * g for (w, g) in zip(weights, node_scale)]
     K = order + 1
 
     seg = p_b - p_a
@@ -137,6 +185,7 @@ def spline3d_stencil(
     knot_step: ArrayNfT,
     knot_num: ArrayNuT,
     stride: ArrayNuT,
+    node_scale: list[FloatT] = None,
 ) -> list[tuple[UIntT, BoolT, FloatT]]:
     r"""
     Contributions of one traversed cell to its :math:`(k+1)^{3}` basis functions.
@@ -154,6 +203,8 @@ def spline3d_stencil(
         (3,) lattice size.
     stride: ArrayNuT
         (3,) C-order strides of the lattice.
+    node_scale: list[FloatT]
+        Optional factor per quadrature node. (See :py:func:`spline3d_weights`.)
 
     Returns
     -------
@@ -177,7 +228,7 @@ def spline3d_stencil(
         ax_valid.append([(_q >= 0) & (_q < num[d]) for _q in q])
         ax_offset.append([UInt(dr.clip(_q, 0, num[d] - 1)) * stride[d] for _q in q])
 
-    weights = spline3d_weights(order, p_a, p_b, knot_step)
+    weights = spline3d_weights(order, p_a, p_b, knot_step, node_scale)
     stencil = []
     for (c1, c2, c3), w in zip(itertools.product(range(K), repeat=3), weights):
         offset = ax_offset[0][c1] + ax_offset[1][c2] + ax_offset[2][c3]

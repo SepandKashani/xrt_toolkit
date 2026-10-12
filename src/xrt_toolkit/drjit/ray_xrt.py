@@ -14,9 +14,11 @@ from .spline3d import (
     spline3d_flush,
     spline3d_grid,
     spline3d_mirror,
+    spline3d_nodes,
     spline3d_stencil,
     spline3d_weights,
 )
+from .tof import tof_window
 
 BoolT = typ.TypeVar("BoolT", bound=dr.AnyArray)
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
@@ -24,31 +26,6 @@ ArrayNiT = typ.TypeVar("ArrayNiT", bound=dr.AnyArray)
 ArrayNuT = typ.TypeVar("ArrayNuT", bound=dr.AnyArray)
 FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
 RaySpecT = tuple[ArrayNfT, ArrayNfT]
-
-
-def _tof_chord_weight(
-    tof: xrtu.TOFSpec,
-    ray_t: ArrayNfT,
-    ray_n: ArrayNfT,
-    bbox_ll: ArrayNfT,
-    knot_step: ArrayNfT,
-):
-    # Integral of the TOF Gaussian over the chord [p_a, p_b] of cell `index` (order 0).
-    # The arc length is measured from the user's anchor `ray_t` along the unit direction.
-    Float = dr.value_t(type(ray_t))
-    mu = Float(tof.center)
-    r_sigma = dr.rcp(Float(tof.sigma) * math.sqrt(2))
-    n_hat = dr.normalize(ray_n)
-
-    def alpha(p: ArrayNfT) -> FloatT:  # arc length of grid position p (in cells)
-        return dr.dot(bbox_ll + p * knot_step - ray_t, n_hat)
-
-    def weight(index: ArrayNfT, p_a: ArrayNfT, p_b: ArrayNfT) -> FloatT:
-        z_a = (alpha(index + p_a) - mu) * r_sigma
-        z_b = (alpha(index + p_b) - mu) * r_sigma
-        return 0.5 * dr.abs(dr.erf(z_b) - dr.erf(z_a))
-
-    return weight
 
 
 def xrt_apply(
@@ -141,7 +118,7 @@ def xrt_apply(
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
     tof: TOFSpec
-        Time-of-flight weighting along each ray (order 0). (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
+        Time-of-flight weighting along each ray. (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
 
     Returns
     -------
@@ -162,8 +139,6 @@ def xrt_apply(
 
     assert knot_spec.ndim == D
     assert order in (0, 1, 2)
-    if (tof is not None) and (order > 0):
-        raise NotImplementedError("tof: only order 0 is supported.")
 
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
@@ -187,7 +162,7 @@ def xrt_apply(
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
     if tof is not None:
-        tof_weight = _tof_chord_weight(tof, ray_t, ray_n, bbox_ll, knot_step)
+        tof_chord, tof_density = tof_window(tof, ray_t, ray_n)
 
     if order == 0:
         state = (buffer,)
@@ -207,15 +182,21 @@ def xrt_apply(
             if tof is None:
                 L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
             else:
-                L = tof_weight(ArrayNf(index), p_a, p_b) * dr.rcp(dr.prod(knot_step))
+                x_a = bbox_ll + (ArrayNf(index) + p_a) * knot_step
+                x_b = bbox_ll + (ArrayNf(index) + p_b) * knot_step
+                L = tof_chord(x_a, x_b) * dr.rcp(dr.prod(knot_step))
             accum += fq * L
 
             return (accum,), Bool(True)
 
     elif D == 2:
-        return spline2d_apply((ray_t, ray_n), knot_spec, order, data, buffer)
+        return spline2d_apply((ray_t, ray_n), knot_spec, order, data, buffer, tof)
 
     elif (D == 3) and (order > 0):
+        # walk the grid of polynomial pieces (covers every basis support).
+        bbox_ll, bbox_ur, grid_res = spline3d_grid(
+            knot_start, knot_step, knot_num, order
+        )
         state = (buffer,)
 
         def project(
@@ -228,18 +209,17 @@ def xrt_apply(
             # exact ray/cell projections of the (order + 1)**3 basis functions.
             (accum,) = state
 
+            g = None  # TOF window at the quadrature nodes
+            if tof is not None:
+                x = spline3d_nodes(order, index, p_a, p_b, bbox_ll, knot_step)
+                g = [tof_density(_x) for _x in x]
             for offset, valid, L in spline3d_stencil(
-                order, index, p_a, p_b, knot_step, knot_num, stride
+                order, index, p_a, p_b, knot_step, knot_num, stride, g
             ):
                 fq = dr.gather(Float, data, offset, valid & active)
                 accum += fq * L
 
             return (accum,), Bool(True)
-
-        # walk the grid of polynomial pieces (covers every basis support).
-        bbox_ll, bbox_ur, grid_res = spline3d_grid(
-            knot_start, knot_step, knot_num, order
-        )
 
     # dda() walks forward from `ray_t`, but we integrate the whole line.
     # -> move `ray_t` just before the bbox entry, wherever it lies on the line.
@@ -297,7 +277,7 @@ def xrt_adjoint(
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
     tof: TOFSpec
-        Time-of-flight weighting along each ray (order 0). (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
+        Time-of-flight weighting along each ray. (See :py:class:`~xrt_toolkit.util.TOFSpec`.)
 
     Returns
     -------
@@ -318,8 +298,6 @@ def xrt_adjoint(
 
     assert knot_spec.ndim == D
     assert order in (0, 1, 2)
-    if (tof is not None) and (order > 0):
-        raise NotImplementedError("tof: only order 0 is supported.")
 
     L = max(ray_t.shape[1], ray_n.shape[1])
     assert type(data) is Float
@@ -343,7 +321,7 @@ def xrt_adjoint(
     elif D == 3:
         stride = ArrayNu(knot_num.y * knot_num.z, knot_num.z, 1)
     if tof is not None:
-        tof_weight = _tof_chord_weight(tof, ray_t, ray_n, bbox_ll, knot_step)
+        tof_chord, tof_density = tof_window(tof, ray_t, ray_n)
 
     if order == 0:
         state = (buffer,)
@@ -362,15 +340,21 @@ def xrt_adjoint(
             if tof is None:
                 L = dr.norm((p_b - p_a) * knot_step) * dr.rcp(dr.prod(knot_step))
             else:
-                L = tof_weight(ArrayNf(index), p_a, p_b) * dr.rcp(dr.prod(knot_step))
+                x_a = bbox_ll + (ArrayNf(index) + p_a) * knot_step
+                x_b = bbox_ll + (ArrayNf(index) + p_b) * knot_step
+                L = tof_chord(x_a, x_b) * dr.rcp(dr.prod(knot_step))
             dr.scatter_add(accum, L * data, offset, active, mode=dr.ReduceMode.Direct)
 
             return (accum,), Bool(True)
 
     elif D == 2:
-        return spline2d_adjoint((ray_t, ray_n), knot_spec, order, data, buffer)
+        return spline2d_adjoint((ray_t, ray_n), knot_spec, order, data, buffer, tof)
 
     elif (D == 3) and (order > 0):
+        # walk the grid of polynomial pieces (covers every basis support).
+        bbox_ll, bbox_ur, grid_res = spline3d_grid(
+            knot_start, knot_step, knot_num, order
+        )
         # running sums of the (order + 1)**3 basis functions overlapping the current
         # cell: each is written once, when the ray leaves its support (see spline3d.py).
         fwd = ray_n >= 0  # travel direction
@@ -400,20 +384,20 @@ def xrt_adjoint(
                 data,
                 buffer,
             )
+            g = None  # TOF window at the quadrature nodes
+            if tof is not None:
+                x = spline3d_nodes(order, index, p_a, p_b, bbox_ll, knot_step)
+                g = [tof_density(_x) for _x in x]
             L = spline3d_weights(
                 order,
                 spline3d_mirror(fwd, p_a),
                 spline3d_mirror(fwd, p_b),
                 knot_step,
+                g,
             )
             sums = [dr.select(active, s + l, s) for (s, l) in zip(sums, L)]
 
             return (sums, cell), Bool(True)
-
-        # walk the grid of polynomial pieces (covers every basis support).
-        bbox_ll, bbox_ur, grid_res = spline3d_grid(
-            knot_start, knot_step, knot_num, order
-        )
 
     # dda() walks forward from `ray_t`, but we integrate the whole line.
     # -> move `ray_t` just before the bbox entry, wherever it lies on the line.

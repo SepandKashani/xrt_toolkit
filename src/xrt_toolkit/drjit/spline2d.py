@@ -19,7 +19,11 @@ Same basis, closed form and (ray, basis function) pairs as a cell-by-cell DDA, c
 4. Degree split. Rays with a masked direction (axis or diagonal within ~1e-3 rad) have a lower degree. They run
    in a second loop, so the degree is fixed at trace time.
 
-5. Coalesced adjoint. The adjoint accumulates into [layout, transposed layout], so the lateral axis is contiguous
+5. TOF. With a TOF window, each basis function's weight is multiplied by the window density at
+   the basis function's center: an approximation, accurate when the window is wide compared to
+   the basis support.
+
+6. Coalesced adjoint. The adjoint accumulates into [layout, transposed layout], so the lateral axis is contiguous
    for every ray, and the lanes of a warp start at the warp's first column, so their atomics hit adjacent
    addresses.
 """
@@ -33,6 +37,7 @@ import xrt_toolkit.util as xrtu
 
 from .bbox import ray_bbox_intersect
 from .box_spline import box_spline_1d_E
+from .tof import tof_window
 
 ArrayNfT = typ.TypeVar("ArrayNfT", bound=dr.AnyArray)
 FloatT = typ.TypeVar("FloatT", bound=dr.AnyArray)
@@ -133,6 +138,7 @@ def _setup(
     knot_spec: xrtu.UniformSpec,
     order: int,
     transpose: bool,
+    tof: xrtu.TOFSpec = None,
 ) -> dict:
     # Per-ray walk constants. Entry/exit columns replicate xrt_apply()'s rewind and
     # dda()'s set-up, so the (ray, basis function) pairs are those of the cell walk.
@@ -241,7 +247,15 @@ def _setup(
     else:
         base = Int(0)
 
+    tof_density = None
+    if tof is not None:
+        _, tof_density = tof_window(tof, ray_t, ray_n)
+
     return dict(
+        tof_density=tof_density,
+        x_main=x_main,
+        knot_start=knot_start,
+        knot_step=knot_step,
         active=active,
         n_iter=n_iter,
         start=start,
@@ -286,7 +300,7 @@ def _column(st: dict, c, n_iter) -> dict:
     jb = Int(dr.floor(fr + st["W0"])) + 1  # first index inside the support
     x0 = dr.fma(st["beta"], Float(jb) + 0.5 - fr, st["delta"])
     ioff = st["base"] + i * st["sa"]
-    return dict(on=on, J0=J0, jlo=jlo, jhi=jhi, jb=jb, x0=x0, ioff=ioff)
+    return dict(on=on, i=i, J0=J0, jlo=jlo, jhi=jhi, jb=jb, x0=x0, ioff=ioff)
 
 
 def _slot(st: dict, col: dict, kk: int, degree: int) -> tuple:
@@ -301,6 +315,12 @@ def _slot(st: dict, col: dict, kk: int, degree: int) -> tuple:
     offset = dr.uint32_array_t(type(col["x0"]))(col["ioff"] + j * st["sb"])
     x = col["x0"] if kk == 0 else dr.fma(st["beta"], float(kk), col["x0"])
     w = _eval(st["knots"], st["coeffs"], x, degree)
+    if st["tof_density"] is not None:  # TOF window at the basis function's center
+        ArrayNf = type(st["knot_start"])
+        Float = type(x)
+        qx = Float(dr.select(st["x_main"], col["i"], j))
+        qy = Float(dr.select(st["x_main"], j, col["i"]))
+        w *= st["tof_density"](st["knot_start"] + ArrayNf(qx, qy) * st["knot_step"])
     return offset, valid, w
 
 
@@ -351,6 +371,7 @@ def spline2d_apply(
     order: int,
     data: FloatT,
     buffer: FloatT,
+    tof: xrtu.TOFSpec = None,
 ) -> FloatT:
     r"""
     2D projections at order 1 or 2.
@@ -359,7 +380,7 @@ def spline2d_apply(
     """
     ray_t, ray_n = ray_spec
     Float = dr.value_t(type(ray_t))
-    st = _setup(ray_t, ray_n, knot_spec, order, transpose=False)
+    st = _setup(ray_t, ray_n, knot_spec, order, transpose=False, tof=tof)
 
     def project(accum, offset, valid, w):
         fq = dr.gather(Float, data, offset, valid)
@@ -375,6 +396,7 @@ def spline2d_adjoint(
     order: int,
     data: FloatT,
     buffer: FloatT,
+    tof: xrtu.TOFSpec = None,
 ) -> FloatT:
     r"""
     Adjoint of :py:func:`spline2d_apply`.
@@ -389,7 +411,7 @@ def spline2d_adjoint(
     # Inside one (e.g. xrt_struct_adjoint()), the fold cannot read the buffer back:
     # accumulate in place.
     transpose = not dr.flag(dr.JitFlag.SymbolicScope)
-    st = _setup(ray_t, ray_n, knot_spec, order, transpose)
+    st = _setup(ray_t, ray_n, knot_spec, order, transpose, tof)
 
     if transpose:
         Q = math.prod(knot_spec.num)

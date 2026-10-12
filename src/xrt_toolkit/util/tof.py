@@ -29,7 +29,14 @@ class TOFSpec:
 
     Notes
     -----
-    Binned TOF data is modelled by repeating each ray once per TOF bin, with that bin's `center`.
+    * Order 0 is exact: the window is integrated over each voxel chord.
+    * 3D orders 1, 2 integrate the window with the basis functions by Gauss quadrature: float32
+      accurate for :math:`\sigma` of one voxel or more.
+    * 2D orders 1, 2 weight each basis function by the window at its center. This is an
+      approximation, with relative error decreasing like 1/:math:`\sigma` (order 1: 1.4% at
+      :math:`\sigma` = 3 pixels, 0.13% at 30).
+    * Binned TOF data is modelled by repeating each ray once per TOF bin, with that bin's
+      `center`.
     """
 
     center: object
