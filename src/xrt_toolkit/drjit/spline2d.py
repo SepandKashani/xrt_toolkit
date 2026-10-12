@@ -140,12 +140,11 @@ def _setup(
     transpose: bool,
     weight: WeightT = None,
 ) -> dict:
-    # Per-ray walk constants. Entry/exit columns replicate xrt_apply()'s rewind and
-    # dda()'s set-up, so the (ray, basis function) pairs are those of the cell walk.
+    # Per-ray walk constants. The walk covers the support of every basis function: the
+    # bbox padded by one cell on each side.
     ArrayNf = type(ray_t)
     ArrayNi = dr.int32_array_t(ArrayNf)
     ArrayNu = dr.uint32_array_t(ArrayNf)
-    Float = dr.value_t(ArrayNf)
     Int = dr.value_t(ArrayNi)
     UInt = dr.value_t(ArrayNu)
 
@@ -155,20 +154,22 @@ def _setup(
     bbox_ll = knot_start - (knot_step / 2)
     bbox_ur = knot_start - (knot_step / 2) + (knot_num * knot_step)
 
-    # move the anchor just before the bbox entry (as xrt_apply)
-    active, t1, t2 = ray_bbox_intersect(bbox_ll, bbox_ur, ray_t, ray_n)
+    # move the anchor just before the padded bbox entry
+    active, t1, t2 = ray_bbox_intersect(
+        bbox_ll - knot_step, bbox_ur + knot_step, ray_t, ray_n
+    )
     t_min = dr.minimum(t1, t2)
     ray_o = dr.select(active, ray_t + (t_min - 1) * ray_n, ray_t)
 
-    # grid coordinates, entry/exit (as dda)
+    # grid coordinates (cell q spans [q, q + 1]), entry/exit of the padded grid [-1, Q + 1]
     grid_res = ArrayNf(knot_num)
     grid_scale = grid_res / (bbox_ur - bbox_ll)
     o = dr.fma(ray_o, grid_scale, -bbox_ll * grid_scale)
     d = dr.select(active, ray_n * grid_scale, ray_n)
     rcp_d = dr.rcp(d)
     inf_t = d == 0
-    t_a = -o * rcp_d
-    t_b = (grid_res - o) * rcp_d
+    t_a = (-1 - o) * rcp_d
+    t_b = (grid_res + 1 - o) * rcp_d
     t_lo = dr.minimum(t_a, t_b)
     t_hi = dr.maximum(t_a, t_b)
     t_hi[inf_t] = dr.inf
@@ -176,10 +177,9 @@ def _setup(
     t_in = dr.maximum(dr.max(t_lo), 0)
     t_out = dr.min(t_hi)
     active &= (t_out > t_in) & dr.isfinite(t_out)
-    active &= dr.all(~inf_t | ((0 <= o) & (o <= grid_res)))
+    active &= dr.all(~inf_t | ((-1 <= o) & (o <= grid_res + 1)))
     o_in = dr.fma(d, t_in, o)
     o_out = dr.fma(d, t_out, o)
-    pi = dr.clip(ArrayNi(o_in), 0, ArrayNi(knot_num - 1))
 
     # main (a) / lateral (b) axis, as xrt_apply
     direction = ray_n * dr.rcp(knot_step)
@@ -188,18 +188,17 @@ def _setup(
     da, db = ab(d)
     oa, ob = ab(o_in)
     oa_out, _ = ab(o_out)
-    i_first, _ = ab(pi)
     Qa, Qb = ab(ArrayNi(knot_num))
     sa, sb = ab(ArrayNi(knot_num.y, 1))
 
+    # columns whose basis functions can meet the ray: one beyond the crossed cells on
+    # each side (supports span 3 columns)
     pos = da >= 0
     step_a = dr.select(pos, Int(1), Int(-1))
-    i_last = Int(dr.select(pos, dr.ceil(oa_out) - 1, dr.floor(oa_out)))
+    i_first = Int(dr.select(pos, dr.floor(oa) - 1, dr.ceil(oa)))
+    i_last = Int(dr.select(pos, dr.ceil(oa_out), dr.floor(oa_out) - 1))
+    i_first = dr.clip(i_first, 0, Qa - 1)
     i_last = dr.clip(i_last, 0, Qa - 1)
-    # as dda(): an entry point that rounds onto the lateral face the ray moves towards
-    # ends the walk after its (zero-length) entry cell.
-    face_exit = ((db > 0) & (ob >= Float(Qb))) | ((db < 0) & (ob <= 0))
-    i_last = dr.select(face_exit, i_first, i_last)
 
     # loop schedule: column i = (start + c) * step_a, c = 0..n_iter-1
     key = i_first * step_a

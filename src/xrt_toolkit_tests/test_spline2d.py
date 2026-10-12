@@ -15,12 +15,14 @@ except Exception:
 
 @pytest.mark.parametrize("order", [0, 1, 2])
 @pytest.mark.parametrize("step", [(1, 1), (0.7, 1.3)])
-def test_single_basis(order, step):
-    # One basis function, rays in all directions: matches the 1D box-spline of its
-    # projected directions. Directions within 1e-2 rad of the lattice axes/diagonals
-    # are excluded (E_mask approximation).
+@pytest.mark.parametrize("q", [(5, 6), (0, 6), (5, 12), (10, 0)])
+def test_single_basis(order, step, q):
+    # One basis function (interior, on an edge, in a corner), rays in all directions,
+    # also outside the lattice: matches the 1D box-spline of its projected directions.
+    # Directions within 1e-2 rad of the lattice axes/diagonals are excluded (E_mask
+    # approximation).
     rng = np.random.default_rng(0)
-    step, start, num, q = np.array(step), np.array([-2.0, 1.0]), (11, 13), (5, 6)
+    step, start, num = np.array(step), np.array([-2.0, 1.0]), (11, 13)
     center = start + np.array(q) * step
 
     th = rng.uniform(0, 2 * np.pi, 3000)
