@@ -133,9 +133,12 @@ def _setup(
     order: int,
     transpose: bool,
     weight: WeightT = None,
+    closed: bool = False,
 ) -> dict:
     # Per-ray walk constants. The walk covers the support of every basis function: the
     # bbox padded by one cell on each side.
+    # closed: also visit the basis functions whose support the ray only touches, where the
+    # order-1 limit profile (degree 1) has a kink.
     ArrayNf = type(ray_t)
     ArrayNi = dr.int32_array_t(ArrayNf)
     ArrayNu = dr.uint32_array_t(ArrayNf)
@@ -232,6 +235,9 @@ def _setup(
     K = Int(dr.ceil(2 * k_sup * dr.abs(r_beta)))
     if order == 1:
         K = dr.select(~masked & (s_hi >= 0), 2, K)
+    closed = (masked & (order == 1)) if closed else None
+    if closed is not None:
+        K = dr.select(closed, K + 1, K)
     K = dr.clip(K, 1, K_MAX)
 
     if transpose:  # lateral axis contiguous for every ray
@@ -270,6 +276,7 @@ def _setup(
         sb=sb,
         base=base,
         masked=masked,
+        closed=closed,
     )
 
 
@@ -290,13 +297,16 @@ def _column(st: dict, c, n_iter) -> dict:
     jlo = Int(dr.floor(fr - st["hs"])) - 1  # dda() lateral range, relative to J0
     jhi = Int(dr.floor(fr + st["hs"])) + 1
     jb = Int(dr.floor(fr + st["W0"])) + 1  # first index inside the support
+    if st["closed"] is not None:  # first index on the closed support
+        jb = dr.select(st["closed"], Int(dr.ceil(fr + st["W0"])), jb)
     x0 = st["beta"] * (Float(jb) + 0.5 - fr)
     ioff = st["base"] + i * st["sa"]
     return dict(on=on, i=i, J0=J0, jlo=jlo, jhi=jhi, jb=jb, x0=x0, ioff=ioff)
 
 
-def _slot(st: dict, col: dict, kk: int, degree: int) -> tuple:
-    # (offset, valid, weight) of lateral slot kk of a column.
+def _basis(st: dict, col: dict, kk: int) -> tuple:
+    # (offset, valid, x, center) of the basis function in lateral slot kk of a column:
+    # x is the closed form's argument, center the basis function's position.
     jr = col["jb"] + kk
     j = col["J0"] + jr
     valid = (
@@ -306,19 +316,31 @@ def _slot(st: dict, col: dict, kk: int, degree: int) -> tuple:
         valid &= kk < st["K"]
     offset = dr.uint32_array_t(type(col["x0"]))(col["ioff"] + j * st["sb"])
     x = col["x0"] if kk == 0 else dr.fma(st["beta"], float(kk), col["x0"])
+
+    ArrayNf = type(st["knot_start"])
+    Float = type(x)
+    qx = Float(dr.select(st["x_main"], col["i"], j))
+    qy = Float(dr.select(st["x_main"], j, col["i"]))
+    center = st["knot_start"] + ArrayNf(qx, qy) * st["knot_step"]
+    return offset, valid, x, center
+
+
+def _slot(st: dict, col: dict, kk: int, degree: int) -> tuple:
+    # (offset, valid, weight) of lateral slot kk of a column.
+    offset, valid, x, center = _basis(st, col, kk)
     w = _eval(st["knots"], st["coeffs"], x, degree)
     if st["w_density"] is not None:  # weight at the basis function's center
-        ArrayNf = type(st["knot_start"])
-        Float = type(x)
-        qx = Float(dr.select(st["x_main"], col["i"], j))
-        qy = Float(dr.select(st["x_main"], j, col["i"]))
-        w *= st["w_density"](st["knot_start"] + ArrayNf(qx, qy) * st["knot_step"])
+        w *= st["w_density"](center)
     return offset, valid, w
 
 
-def _walk(st: dict, order: int, slot_fn: typ.Callable, carry):
+def _walk(
+    st: dict, order: int, slot_fn: typ.Callable, carry, slot: typ.Callable = None
+):
     # Visit every (ray, basis function) pair:
-    #     carry = slot_fn(carry, offset, valid, weight)
+    #     carry = slot_fn(carry, *slot(st, column, kk, degree))
+    # with slot = _slot: carry = slot_fn(carry, offset, valid, weight).
+    slot = _slot if (slot is None) else slot
     Int = type(st["K"])
     L = dr.width(st["n_iter"])
     skip = order == 1  # slots 2-3 behind a (warp-uniform) branch on K
@@ -332,13 +354,13 @@ def _walk(st: dict, order: int, slot_fn: typ.Callable, carry):
         def rest(carry, c, degree=degree, n_iter=n_iter):
             col = _column(st, c, n_iter)
             for kk in range(2, K_MAX):
-                carry = slot_fn(carry, *_slot(st, col, kk, degree))
+                carry = slot_fn(carry, *slot(st, col, kk, degree))
             return carry
 
         def body(c, carry, degree=degree, n_iter=n_iter, rest=rest):
             col = _column(st, c, n_iter)
             for kk in range(2):
-                carry = slot_fn(carry, *_slot(st, col, kk, degree))
+                carry = slot_fn(carry, *slot(st, col, kk, degree))
             if skip:
                 carry = dr.if_stmt(
                     (carry, c), st["K"] > 2, rest, lambda carry, c: carry
@@ -425,3 +447,93 @@ def spline2d_adjoint(
         buffer += dr.gather(Float, target, k)
         buffer += dr.gather(Float, target, Q + (k % Qy) * Qx + k // Qy)
     return buffer
+
+
+def _closed_form_grad(
+    order: int, knot_step: ArrayNfT, n_perp: ArrayNfT, n_hat: ArrayNfT
+) -> tuple:
+    # Derivatives of _closed_form()'s knots and coeffs in the ray angle theta
+    # (d n_perp / d theta = -n_hat), by forward-mode AD outside the walk. On an axis or a
+    # diagonal, |E_k| has zero derivative: the average of both sides.
+    ArrayNf = type(n_perp)
+    Float = dr.value_t(ArrayNf)
+    ArrayNf_ad = dr.diff_array_t(ArrayNf)
+    Float_ad = dr.value_t(ArrayNf_ad)
+
+    theta = dr.zeros(Float_ad, dr.width(n_perp))
+    dr.enable_grad(theta)
+    knots, coeffs, _, _ = _closed_form(
+        order, ArrayNf_ad(knot_step), ArrayNf_ad(n_perp) - theta * ArrayNf_ad(n_hat)
+    )
+    dr.forward_from(theta)
+    d = lambda v: Float(dr.detach(dr.grad(v)))  # noqa: E731
+    return [d(_) for _ in knots], [d(_) for _ in coeffs]
+
+
+def _slot_grad(st: dict, col: dict, kk: int, degree: int) -> tuple:
+    # (offset, valid, dw/dx, dw/dtheta at fixed x, alpha) of lateral slot kk of a column,
+    # with x the signed distance of the basis center to the line and alpha its arc length
+    # along it.
+    offset, valid, x, center = _basis(st, col, kk)
+    Float = type(x)
+    u = dr.abs(x)
+    sgn = dr.select(
+        x > 0, Float(1), dr.select(x < 0, Float(-1), 0)
+    )  # 0 at x = 0: average
+    w_u, w_th = Float(0), Float(0)
+    for k_t, c_t, dk_t, dc_t in zip(
+        st["knots"], st["coeffs"], st["dknots"], st["dcoeffs"]
+    ):
+        z = dr.maximum(k_t - u, 0)
+        if degree == 1:  # on the kink z = 0: average of both sides
+            p, dp = z, dr.select(z > 0, Float(1), dr.select(k_t == u, Float(0.5), 0))
+        elif degree == 2:
+            p, dp = z * z, 2 * z
+        else:
+            p, dp = z * z * z, 3 * z * z
+        w_u = dr.fma(c_t, dp, w_u)  # d/dk_t of the term, = -d/du
+        w_th += dc_t * p + c_t * dp * dk_t
+    w_x = -sgn * w_u
+    alpha = dr.dot(center - st["ray_t"], st["n_hat"])
+    return offset, valid, w_x, w_th, alpha
+
+
+def spline2d_grad(
+    ray_spec: RaySpecT,
+    knot_spec: xrtu.UniformSpec,
+    order: int,
+    data: FloatT,
+) -> tuple[ArrayNfT, ArrayNfT]:
+    r"""
+    Gradients of the 2D projections at order 1 or 2 with respect to the rays.
+
+    Called by :py:func:`~xrt_toolkit.drjit.ray_grad.xrt_grad`, which documents the parameters.
+
+    The projection of a basis function is its closed form :math:`w(\rho; \theta)`, with
+    :math:`\rho` the signed distance of its center to the line and :math:`\theta` the ray angle.
+    The anchor moves :math:`\rho` only; the direction moves :math:`\rho` (by the arc length of the
+    center, about the anchor) and the closed form itself.
+    """
+    ray_t, ray_n = ray_spec
+    ArrayNf = type(ray_t)
+    Float = dr.value_t(ArrayNf)
+    L = max(ray_t.shape[1], ray_n.shape[1])
+
+    st = _setup(ray_t, ray_n, knot_spec, order, transpose=False, closed=True)
+    n_hat = dr.normalize(ray_n)
+    n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
+    dknots, dcoeffs = _closed_form_grad(order, ArrayNf(*knot_spec.step), n_perp, n_hat)
+    st.update(dknots=dknots, dcoeffs=dcoeffs, ray_t=ray_t, n_hat=n_hat)
+
+    def accumulate(carry, offset, valid, w_x, w_th, alpha):
+        S, A, B = carry
+        fq = dr.gather(Float, data, offset, valid)
+        return dr.fma(fq, w_x, S), dr.fma(fq * w_x, alpha, A), dr.fma(fq, w_th, B)
+
+    carry = tuple(dr.zeros(Float, L) for _ in range(3))
+    S, A, B = _walk(st, order, accumulate, carry, slot=_slot_grad)
+
+    # d rho / d t = -n_perp, d rho / d theta = -alpha, d theta / d n = n_perp / |n|
+    grad_t = -n_perp * S
+    grad_n = n_perp * ((B - A) * dr.rcp(dr.norm(ray_n)))
+    return grad_t, grad_n

@@ -1,8 +1,11 @@
+import math
+
 import drjit as dr
 import numpy as np
 import pytest
 
 import xrt_toolkit as xtk
+from xrt_toolkit.drjit.box_spline import box_spline_1d_np
 
 try:
     from drjit.cuda import Array2f, Array2f64, Array3f, Array3f64, Float, Float64
@@ -79,11 +82,29 @@ def spline_projections(f, knot_spec, order, t, n) -> np.ndarray:
     return out
 
 
+def box_spline_projections(f, knot_spec, order, t, n) -> np.ndarray:
+    # 2D order-1/2 projections in float64: the projection of a basis function is the 1D
+    # box-spline of its projected directions, at the signed distance of its center to the line.
+    start, step, num = map(np.array, (knot_spec.start, knot_spec.step, knot_spec.num))
+    axes = [start[d] + step[d] * np.arange(num[d]) for d in range(2)]
+    c = np.stack([_c.ravel() for _c in np.meshgrid(*axes, indexing="ij")])  # (2, Q)
+    E_dir = np.array([(1, 0), (0, 1), (1, 1), (1, -1)])[: order + 2] * step
+    out = np.zeros(t.shape[1])
+    for l in range(t.shape[1]):
+        u = n[:, l] / np.linalg.norm(n[:, l])
+        u_perp = np.array([-u[1], u[0]])
+        rho = u_perp @ (c - t[:, l, None])
+        out[l] = f.ravel() @ box_spline_1d_np(np.abs(E_dir @ u_perp), rho)
+    return out
+
+
 def finite_differences(f, knot_spec, t, n, h, order=0) -> tuple:
     # central differences of the projections in each anchor/direction component
     D = t.shape[0]
     if order == 0:
         P = lambda t_, n_: projections(f, knot_spec, t_, n_)  # noqa: E731
+    elif D == 2:
+        P = lambda t_, n_: box_spline_projections(f, knot_spec, order, t_, n_)  # noqa: E731
     else:
         P = lambda t_, n_: spline_projections(f, knot_spec, order, t_, n_)  # noqa: E731
     fd_t, fd_n = np.zeros(t.shape), np.zeros(n.shape)
@@ -191,6 +212,108 @@ def test_grad_splines3d_planes(order):
 
     g_t, g_n = grad(f, knot_spec, t, n, "float64", order)
     fd_t, fd_n = finite_differences(f, knot_spec, t, n, 1e-7, order)
+    assert np.abs(g_t - fd_t).max() < 1e-5 * np.abs(fd_t).max()
+    assert np.abs(g_n - fd_n).max() < 1e-5 * np.abs(fd_n).max()
+
+
+@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("precision", ["float64", "float32"])
+def test_grad_splines2d(order, precision):
+    # 2D orders 1, 2: gradients match central differences. Directions within 1e-2 rad of the
+    # lattice axes/diagonals are excluded here (limit formula, see test_grad_splines2d_axes).
+    knot_spec = xtk.UniformSpec(start=(-1.1, 0.3), step=(0.5, 1.0), num=(14, 11))
+    rng = np.random.default_rng(3)
+    t, n = random_rays(knot_spec, 300, rng, precision)
+    g = n / np.array(knot_spec.step)[:, None]
+    ang = np.arctan2(g[1], g[0]) % (np.pi / 4)  # angle in lattice units
+    keep = (1e-2 < ang) & (ang < np.pi / 4 - 1e-2)
+    t, n = t[:, keep], n[:, keep]
+    f = rng.standard_normal(knot_spec.num)
+
+    g_t, g_n = grad(f, knot_spec, t, n, precision, order)
+    fd_t, fd_n = finite_differences(f, knot_spec, t, n, 1e-6, order)
+    assert np.abs(g_t - fd_t).max() < 2e-5 * np.abs(fd_t).max()
+    assert np.abs(g_n - fd_n).max() < 2e-5 * np.abs(fd_n).max()
+    assert np.abs(np.sum(g_t * n, axis=0)).max() < 2e-5 * np.abs(fd_t).max()
+    assert np.abs(np.sum(g_n * n, axis=0)).max() < 2e-5 * np.abs(fd_n).max()
+
+
+@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("n", [(1, 0), (0, -2), (0.5, 1), (-1, 2), (1, 2e-4)])
+def test_grad_splines2d_axes(order, n):
+    # 2D orders 1, 2, rays along a lattice axis or diagonal, where one projected direction
+    # vanishes, or within 1e-3 of it (limit formula): gradients match central differences.
+    knot_spec = xtk.UniformSpec(start=(-1.1, 0.3), step=(0.5, 1.0), num=(14, 11))
+    rng = np.random.default_rng(4)
+    L = 100
+    n = np.tile(np.array(n, dtype=float)[:, None], (1, L))
+    t, _ = random_rays(knot_spec, L, rng, "float64")
+    f = rng.standard_normal(knot_spec.num)
+
+    g_t, g_n = grad(f, knot_spec, t, n, "float64", order)
+    fd_t, fd_n = finite_differences(f, knot_spec, t, n, 1e-7, order)
+    assert np.abs(g_t - fd_t).max() < 1e-5 * np.abs(fd_t).max()
+    assert np.abs(g_n - fd_n).max() < 1e-5 * np.abs(fd_n).max()
+
+
+@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("n", [(1, 0), (0, -1)])
+def test_grad_splines2d_kinks(order, n):
+    # 2D orders 1, 2, rays along a lattice axis through basis centers: kinks of the
+    # projection, where the gradient is the average of both sides. Reference: central
+    # differences of the exact box-spline in 50-digit arithmetic.
+    mp = pytest.importorskip("mpmath")
+    mp.mp.dps = 50
+    knot_spec = xtk.UniformSpec(start=(-1.0, 0.25), step=(0.5, 1.0), num=(6, 5))
+    rng = np.random.default_rng(5)
+    L = 6
+    n = np.tile(np.array(n, dtype=float)[:, None], (1, L))
+    q = np.stack([rng.integers(0, num, L) for num in knot_spec.num])
+    t = np.array(knot_spec.start)[:, None] + q * np.array(knot_spec.step)[:, None]
+    t -= rng.uniform(-10, 10, L) * n  # anchors on the line through a basis center
+    f = rng.standard_normal(knot_spec.num)
+
+    E_dir = [(1, 0), (0, 1), (1, 1), (1, -1)][: order + 2]
+
+    def P(t_, n_) -> float:
+        # exact projection; a vanishing projected direction drops out
+        u = [_ / mp.sqrt(n_[0] ** 2 + n_[1] ** 2) for _ in n_]
+        u_perp = (-u[1], u[0])
+        step = [mp.mpf(_) for _ in knot_spec.step]
+        E = [
+            abs(u_perp[0] * e[0] * step[0] + u_perp[1] * e[1] * step[1]) for e in E_dir
+        ]
+        E = [_ for _ in E if _ != 0]
+        N, c = len(E), sum(E) / 2
+        out = mp.mpf(0)
+        for i, j in np.ndindex(*knot_spec.num):
+            x = [
+                mp.mpf(knot_spec.start[d]) + (i, j)[d] * step[d] - t_[d]
+                for d in range(2)
+            ]
+            rho = u_perp[0] * x[0] + u_perp[1] * x[1]
+            y = mp.mpf(0)
+            for S in np.ndindex(*(2,) * N):
+                z = rho + c - sum(e for e, s in zip(E, S) if s)
+                y += (-1) ** sum(S) * z ** (N - 1) if z > 0 else 0
+            out += mp.mpf(f[i, j]) * y / (math.factorial(N - 1) * mp.fprod(E))
+        return out
+
+    h = mp.mpf("1e-10")
+    fd_t, fd_n = np.zeros((2, L)), np.zeros((2, L))
+    for l, k in np.ndindex(L, 2):
+        t_, n_ = [mp.mpf(_) for _ in t[:, l]], [mp.mpf(_) for _ in n[:, l]]
+        e = [h if (d == k) else 0 for d in range(2)]
+        fd_t[k, l] = (
+            P([a + b for a, b in zip(t_, e)], n_)
+            - P([a - b for a, b in zip(t_, e)], n_)
+        ) / (2 * h)
+        fd_n[k, l] = (
+            P(t_, [a + b for a, b in zip(n_, e)])
+            - P(t_, [a - b for a, b in zip(n_, e)])
+        ) / (2 * h)
+
+    g_t, g_n = grad(f, knot_spec, t, n, "float64", order)
     assert np.abs(g_t - fd_t).max() < 1e-5 * np.abs(fd_t).max()
     assert np.abs(g_n - fd_n).max() < 1e-5 * np.abs(fd_n).max()
 

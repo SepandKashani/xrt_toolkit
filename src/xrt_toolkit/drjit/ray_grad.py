@@ -8,6 +8,7 @@ import xrt_toolkit.util as xrtu
 
 from .bbox import ray_bbox_intersect
 from .dda import dda
+from .spline2d import spline2d_grad
 from .spline3d import (
     spline3d_cell_basis,
     spline3d_coeffs,
@@ -54,7 +55,7 @@ def xrt_grad(
     knot_spec: UniformSpec
         Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.
     order: 0 | 1 | 2
-        Interpolation order (orders 1, 2: 3D only).
+        Interpolation order.
     data: FloatT
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
 
@@ -75,6 +76,16 @@ def xrt_grad(
     * A ray through a lattice edge or corner (several faces crossed at once) is a kink of
       :math:`P_{l}`. There, the jump across face :math:`k` is averaged over face :math:`k` crossed
       first and crossed last: the gradient is what central finite differences converge to.
+    * Orders 1, 2: in 3D, :math:`\nabla f` is integrated over each polynomial piece (exact). In 2D, the
+      closed-form projection of each basis function is differentiated: the anchor moves its
+      distance to the line; the direction moves that distance (about the anchor) and the closed
+      form itself.
+    * 2D, order 1, rays along a lattice axis through basis centers: kinks of :math:`P_{l}`, where
+      the gradient is again the average of both sides (along a diagonal, rounding makes it
+      one-sided).
+    * 2D, orders 1, 2, float32: within about 0.01 rad of a lattice axis or diagonal, the closed form
+      cancels and :math:`\nabla_{\bbn} P_{l}` loses accuracy (relative error 1e-4 at 0.01 rad, 3e-3
+      at 0.002 rad); float64 is exact.
     """
     ray_t, ray_n = ray_spec
 
@@ -87,7 +98,7 @@ def xrt_grad(
     assert type(ray_n) is ArrayNf
 
     assert knot_spec.ndim == D
-    assert (order == 0) or ((D == 3) and (order in (1, 2)))
+    assert order in (0, 1, 2)
 
     assert type(data) is Float
     assert len(data) == math.prod(knot_spec.num)
@@ -95,6 +106,8 @@ def xrt_grad(
 
     if order == 0:
         return _grad_voxel(ray_t, ray_n, knot_spec, data)
+    elif D == 2:
+        return spline2d_grad(ray_spec, knot_spec, order, data)
     else:
         return _grad_spline3d(ray_t, ray_n, knot_spec, order, data)
 
