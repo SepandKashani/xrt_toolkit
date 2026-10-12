@@ -72,6 +72,9 @@ def box_spline_1d_np(
         return B  # (2**n,)
 
     E_mask = abs(E) >= 1e-3
+    E = np.where(
+        E_mask, E, 0
+    )  # dropped: one direction less, O(E**2) from the exact one
     N_tot = len(E_mask)
     N_nz = E_mask.sum().item()
 
@@ -122,6 +125,7 @@ def box_spline_1d_dr(
     assert type(E_mask) is ArrayNi
     assert type(x) is Float
     # -----------------------------------------------------
+    E = dr.select(E_mask == 0, 0, E)  # dropped directions
 
     def factorial(n: IntT) -> IntT:
         return dr.gather(
@@ -339,7 +343,10 @@ def box_spline_1d_E(
             to_1d(ArrayNf(+1, -1)),
         )[: order + 2]
 
+        # Directions with E <= 1e-3 are dropped (E = 0, E_mask = 0): the box-spline then has one
+        # direction less, which differs from the exact one by O(E**2).
         E_mask_t = dr.int_array_t(E)
         E_mask = dr.select(E <= 1e-3, E_mask_t(0), E_mask_t(1))
+        E = dr.select(E_mask == 0, 0, E)
 
         return E, E_mask

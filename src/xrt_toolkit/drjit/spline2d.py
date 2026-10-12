@@ -9,9 +9,9 @@ Same basis, closed form and (ray, basis function) pairs as a cell-by-cell DDA, c
    most 4. Each basis function is visited once per ray, with no per-step branch and no previous-cell state.
 
 2. Closed form folded once per ray. The projected box-spline is symmetric, so only the truncated powers with
-   positive knots remain: :math:`B(u) = \sum_{t} c_{t} (k_{t} - u)_{+}^{m}` with :math:`u = |x + \delta|`. For
-   order 2 the 16 knots reduce to 4; for order 1 the 8 knots reduce to 3. Knots, coefficients, degree and the
-   E_mask shift :math:`\delta` are per-ray constants.
+   positive knots remain: :math:`B(u) = \sum_{t} c_{t} (k_{t} - u)_{+}^{m}` with :math:`u = |x|`. For
+   order 2 the 16 knots reduce to 4; for order 1 the 8 knots reduce to 3. Knots, coefficients and degree are
+   per-ray constants.
 
 3. Drift-free lateral position. Per column, the lateral coordinate of the ray is split into integer + fraction
    with an exact two-product, so float32 distances stay O(1) on any grid size.
@@ -47,9 +47,9 @@ K_MAX = 4  # max basis functions per column
 
 
 def _closed_form(order: int, knot_step: ArrayNfT, n_perp: ArrayNfT) -> tuple:
-    # Per-ray constants (knots, coeffs, delta, k_sup, masked) such that
+    # Per-ray constants (knots, coeffs, k_sup, masked) such that
     #     box_spline_1d_dr(E, E_mask, x)
-    #     = sum_t coeffs[t] * max(knots[t] - |x + delta|, 0) ** m,
+    #     = sum_t coeffs[t] * max(knots[t] - |x|, 0) ** m,
     # with m = order + 1 if no direction is masked, else m = order.
     # k_sup is the support half-width.
     E, E_mask = box_spline_1d_E(order, knot_step, n_perp)
@@ -59,12 +59,6 @@ def _closed_form(order: int, knot_step: ArrayNfT, n_perp: ArrayNfT) -> tuple:
     masked = dr.zeros(dr.mask_t(Float), dr.width(E[0]))
     for k in range(N):
         masked |= E_mask[k] == 0
-
-    # E_mask rule: a masked direction keeps +E_k/2 in every knot and drops out of
-    # the degree and the normalization -> shift by delta = E_k / 2.
-    delta = Float(0)
-    for k in range(N):
-        delta += 0.5 * E[k] * (1 - m_f[k])
 
     # normalization of box_spline_1d_dr(): 1 / ((N_nz - 1)! prod(E + 1 - E_mask))
     prod = Float(1)
@@ -118,7 +112,7 @@ def _closed_form(order: int, knot_step: ArrayNfT, n_perp: ArrayNfT) -> tuple:
     coeffs = [
         dr.select(masked, c_p, c_f) * norm for (_, c_f), (_, c_p) in zip(full, part)
     ]
-    return knots, coeffs, delta, knots[0], masked
+    return knots, coeffs, knots[0], masked
 
 
 def _eval(knots: list, coeffs: list, x: FloatT, degree: int) -> FloatT:
@@ -228,11 +222,11 @@ def _setup(
 
     # closed form and support
     n_perp = dr.normalize(ArrayNf(-ray_n.y, ray_n.x))
-    knots, coeffs, delta, k_sup, masked = _closed_form(order, knot_step, n_perp)
+    knots, coeffs, k_sup, masked = _closed_form(order, knot_step, n_perp)
     _, beta = ab(n_perp * knot_step)  # x(i, j) = beta * (j + 1/2 - yc(i))
-    # first lateral index inside the support: |beta (j + 1/2 - yc) + delta| < k_sup
+    # first lateral index inside the support: |beta (j + 1/2 - yc)| < k_sup
     r_beta = dr.rcp(beta)
-    w_lo = dr.minimum((-k_sup - delta) * r_beta, (k_sup - delta) * r_beta)
+    w_lo = -k_sup * dr.abs(r_beta)
     # basis functions per column: ceil(2 k_sup / |beta|); 2 for an unmasked order-1 ray
     # on the (1, 1) diagonal side (support exactly 2 lateral steps wide).
     K = Int(dr.ceil(2 * k_sup * dr.abs(r_beta)))
@@ -269,7 +263,6 @@ def _setup(
         W0=w_lo - 0.5,
         K=K,
         beta=beta,
-        delta=delta,
         knots=knots,
         coeffs=coeffs,
         Qb=Qb,
@@ -297,7 +290,7 @@ def _column(st: dict, c, n_iter) -> dict:
     jlo = Int(dr.floor(fr - st["hs"])) - 1  # dda() lateral range, relative to J0
     jhi = Int(dr.floor(fr + st["hs"])) + 1
     jb = Int(dr.floor(fr + st["W0"])) + 1  # first index inside the support
-    x0 = dr.fma(st["beta"], Float(jb) + 0.5 - fr, st["delta"])
+    x0 = st["beta"] * (Float(jb) + 0.5 - fr)
     ioff = st["base"] + i * st["sa"]
     return dict(on=on, i=i, J0=J0, jlo=jlo, jhi=jhi, jb=jb, x0=x0, ioff=ioff)
 
