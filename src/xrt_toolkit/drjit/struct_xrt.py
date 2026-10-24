@@ -47,7 +47,7 @@ def xrt_struct_apply(
        \bbDelta \in \bR_{+}^{D},
 
     and :math:`\psi` a box spline with direction vectors
-    :math:`\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}`.
+    :math:`\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}`, of unit integral.
 
     Then ``xrt_struct_apply()`` computes samples of
 
@@ -119,6 +119,7 @@ def xrt_struct_apply(
 
              \psi(\bbx)
              =
+             \frac{1}{\Delta_{1} \Delta_{2} \Delta_{3}}
              \beta^{k}(x_{1} / \Delta_{1})
              \beta^{k}(x_{2} / \Delta_{2})
              \beta^{k}(x_{3} / \Delta_{3}),
@@ -186,6 +187,8 @@ def xrt_struct_adjoint(
     Compute 2D/3D structured back-projections.
 
     Adjoint of ``xrt_struct_apply()``: maps projection weights to volume expansion coefficients.
+    It is the exact transpose, :math:`\langle A f, y \rangle = \langle f, A^{T} y \rangle` up to
+    rounding: the same rays meet the same basis functions with the same weights.
 
     Parameters
     ----------
