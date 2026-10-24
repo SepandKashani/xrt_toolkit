@@ -15,6 +15,7 @@ requires-python = ">= 3.10, < 3.14"
 license = "MIT"
 authors = [
     { name = "S. Kashani", email = "sepand@kashani.ch" },
+    { name = "Y. Haouchat", email = "youssef.haouchat@epfl.ch" },
 ]
 classifiers = [
     "Topic :: Scientific/Engineering",
