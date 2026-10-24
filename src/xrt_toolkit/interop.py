@@ -73,7 +73,7 @@ def vol_astra_to_xtk(vol: np.ndarray) -> np.ndarray:
 
 def vol_xtk_to_astra(flat: np.ndarray, num: tuple[int]) -> np.ndarray:
     r"""
-    Inverse of :py:func:`vol_astra_to_xtk`.
+    Inverse of :py:func:`~xrt_toolkit.interop.vol_astra_to_xtk`.
 
     Parameters
     ----------
@@ -102,7 +102,8 @@ def from_astra(proj_geom: dict, vol_geom: dict, Array=None) -> tuple:
     The returned ``(ray_spec, knot_spec)`` can be passed directly to
     :py:func:`~xrt_toolkit.xrt_apply` and :py:func:`~xrt_toolkit.xrt_adjoint`. The rays are ordered
     as the flattened ASTRA sinogram: (angles, det) in 2D, (det_v, angles, det_u) in 3D. Convert
-    volume arrays with :py:func:`vol_astra_to_xtk` and :py:func:`vol_xtk_to_astra`.
+    volume arrays with :py:func:`~xrt_toolkit.interop.vol_astra_to_xtk` and
+    :py:func:`~xrt_toolkit.interop.vol_xtk_to_astra`.
 
     Supported geometries: ``parallel``, ``fanflat``, ``parallel3d``, ``cone`` and their ``*_vec``
     forms. Only the non-``*_vec`` forms need ``astra-toolbox`` to be installed.

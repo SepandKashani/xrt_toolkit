@@ -25,6 +25,7 @@ def asarray(x) -> dr.AnyArray:
     -------
     y: AnyArray
         DrJit array of type:
+
         - (N,) -> Float{precision}
         - (N, D) -> ArrayDf{precision}
         - (N, D, D) -> ArrayDDf{precision}

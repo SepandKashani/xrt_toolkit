@@ -46,19 +46,22 @@ def xrt_apply(
        f(\bbx)
        =
        \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
-       f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
+       f_{\bbq} \psi(\bbx - \bbx_{\bbq}),
 
     with
 
     .. math::
 
        f_{\bbq} \in \bR,
-       \bbx_{q} = \bbx_{0} + \bbq \odot \bbDelta,
-           \bbx_{0} \in \bR^{D},
-           \bbDelta \in \bR_{+}^{D},
-       \psi(\bbx; \bbE \in \bR^{D \times N}) =
-           box-spline with direction vectors
-           \{ \bbe_{l} \in \bR^{D} \}_{l=1..N}
+       \qquad
+       \bbx_{\bbq} = \bbx_{0} + \bbq \odot \bbDelta,
+       \qquad
+       \bbx_{0} \in \bR^{D},
+       \quad
+       \bbDelta \in \bR_{+}^{D},
+
+    and :math:`\psi` a box spline with direction vectors
+    :math:`\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}`.
 
     Then ``xrt_apply()`` computes samples of
 
@@ -87,15 +90,23 @@ def xrt_apply(
 
           .. math::
 
-             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}
-                               0  \bbDelta_{2} \bbDelta_{2}]
+             \bbE
+             =
+             \begin{bmatrix}
+                \Delta_{1} & 0 & \Delta_{1} \\
+                0 & \Delta_{2} & \Delta_{2}
+             \end{bmatrix}
 
         * order = 2 (2D):
 
           .. math::
 
-             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}  \bbDelta_{1}
-                               0  \bbDelta_{2} \bbDelta_{2} -\bbDelta_{2}]
+             \bbE
+             =
+             \begin{bmatrix}
+                \Delta_{1} & 0 & \Delta_{1} & \Delta_{1} \\
+                0 & \Delta_{2} & \Delta_{2} & -\Delta_{2}
+             \end{bmatrix}
 
         * order = 1, 2 (3D): tensor-product B-splines (trilinear, triquadratic)
 
@@ -111,7 +122,7 @@ def xrt_apply(
              \quad
              k = \text{order}
 
-        The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
+        The support of :math:`\psi` and its projections can be viewed using :py:func:`~xrt_toolkit.plot_2d_basis`.
 
     data: FloatT
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
@@ -120,8 +131,8 @@ def xrt_apply(
     weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec
         Weight along each ray: the line integral becomes :math:`\int_{\bR} f(\bbt + \alpha
         \hat{\bbn}) w(\alpha) d\alpha`, with :math:`\alpha` the arc length from the anchor.
-        (See :py:class:`~xrt_toolkit.util.TOFSpec`, :py:class:`~xrt_toolkit.util.PolynomialWeightSpec`,
-        :py:class:`~xrt_toolkit.util.TabulatedWeightSpec`.)
+        (See :py:class:`~xrt_toolkit.TOFSpec`, :py:class:`~xrt_toolkit.PolynomialWeightSpec`,
+        :py:class:`~xrt_toolkit.TabulatedWeightSpec`.)
 
     Returns
     -------
@@ -274,7 +285,7 @@ def xrt_adjoint(
         Data interpolation order.
 
         This parameter sets which :math:`\psi` is used to interpolate data values.
-        The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
+        The support of :math:`\psi` and its projections can be viewed using :py:func:`~xrt_toolkit.plot_2d_basis`.
     data: FloatT
         (L,) projections :math:`g_{l} \in \bR`.
     buffer: FloatT
@@ -282,8 +293,8 @@ def xrt_adjoint(
     weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec
         Weight along each ray: the line integral becomes :math:`\int_{\bR} f(\bbt + \alpha
         \hat{\bbn}) w(\alpha) d\alpha`, with :math:`\alpha` the arc length from the anchor.
-        (See :py:class:`~xrt_toolkit.util.TOFSpec`, :py:class:`~xrt_toolkit.util.PolynomialWeightSpec`,
-        :py:class:`~xrt_toolkit.util.TabulatedWeightSpec`.)
+        (See :py:class:`~xrt_toolkit.TOFSpec`, :py:class:`~xrt_toolkit.PolynomialWeightSpec`,
+        :py:class:`~xrt_toolkit.TabulatedWeightSpec`.)
 
     Returns
     -------

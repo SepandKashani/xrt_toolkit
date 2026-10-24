@@ -26,16 +26,16 @@ class UniformSpec:
 
     def __init__(self, start, step, num):
         r"""
+        Scalars are broadcast to all dimensions.
+
         Parameters
         ----------
         start: tuple[float]
-            \bbx_{0} \in \bR^{D}
+            :math:`\bbx_{0} \in \bR^{D}`
         step: tuple[float]
-            \Delta_{\bbx} \in \bR_{+}^{D}
+            :math:`\Delta_{\bbx} \in \bR_{+}^{D}`
         num: tuple[int]
             (M1,...,MD) lattice size
-
-        Scalars are broadcast to all dimensions.
         """
         start = broadcast_seq(start, None, float)
 
@@ -65,14 +65,14 @@ class UniformSpec:
         r"""
         Initialize a UniformSpec centered at the origin.
 
+        Scalars are broadcast to all dimensions.
+
         Parameters
         ----------
         step: tuple[float]
-            \Delta_{\bbx} \in \bR_{+}^{D}
+            :math:`\Delta_{\bbx} \in \bR_{+}^{D}`
         num: tuple[int]
             (M1,...,MD) lattice size
-
-        Scalars are broadcast to all dimensions.
 
         Returns
         -------
@@ -105,17 +105,17 @@ class DetectorSpec:
 
     def __init__(self, size, num_cell):
         r"""
+        Scalars are broadcast to all dimensions.
+
         Parameters
         ----------
         size: tuple[float]
-            Detector span (unitless) \in \bR_{+}^{D}
+            Detector span (unitless) :math:`\in \bR_{+}^{D}`.
 
             A 1D size denotes detector width.
             A 2D size denotes detector (width, height).
         num_cell: tuple[int]
             (M1,...,MD) cell count per dimension
-
-        Scalars are broadcast to all dimensions.
         """
         size = broadcast_seq(size, None, float)
         assert all(s > 0 for s in size)

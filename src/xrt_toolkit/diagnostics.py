@@ -28,7 +28,7 @@ def plot_rays(
     ray_spec: tuple[ArrayNfT, ArrayNfT] | tuple[ArrayNNfT, ArrayNNfT, UniformSpec]
         (L,) ray anchors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}`.
 
-        There are two methods to specify ray parameters (\bbt, \bbn):
+        There are two methods to specify ray parameters :math:`(\bbt, \bbn)`:
 
         * Explicit, as in ``xrt_apply()``,
         * Implicit, as in ``xrt_struct_apply()``.
@@ -239,6 +239,7 @@ def plot_2d_basis(
     Visualize basis function :math:`\psi: \bR^{2} \to \bR`.
 
     Shows side-by-side:
+
     - a portion of the neighborhood grid with the support of :math:`\psi` overlayed.
     - 1d projections of :math:`\psi` at projection directions `ray_n`.
 

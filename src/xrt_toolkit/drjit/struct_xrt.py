@@ -32,19 +32,22 @@ def xrt_struct_apply(
        f(\bbx)
        =
        \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
-       f_{\bbq} \psi_(\bbx - \bbx_{\bbq}),
+       f_{\bbq} \psi(\bbx - \bbx_{\bbq}),
 
     with
 
     .. math::
 
        f_{\bbq} \in \bR,
-       \bbx_{q} = \bbx_{0} + \bbq \odot \bbDelta,
-           \bbx_{0} \in \bR^{D},
-           \bbDelta \in \bR_{+}^{D},
-       \psi(\bbx; \bbE \in \bR^{D \times N}) =
-           box-spline with direction vectors
-           \{ \bbe_{l} \in \bR^{D} \}_{l=1..N}
+       \qquad
+       \bbx_{\bbq} = \bbx_{0} + \bbq \odot \bbDelta,
+       \qquad
+       \bbx_{0} \in \bR^{D},
+       \quad
+       \bbDelta \in \bR_{+}^{D},
+
+    and :math:`\psi` a box spline with direction vectors
+    :math:`\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}`.
 
     Then ``xrt_struct_apply()`` computes samples of
 
@@ -92,15 +95,23 @@ def xrt_struct_apply(
 
           .. math::
 
-             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}
-                               0  \bbDelta_{2} \bbDelta_{2}]
+             \bbE
+             =
+             \begin{bmatrix}
+                \Delta_{1} & 0 & \Delta_{1} \\
+                0 & \Delta_{2} & \Delta_{2}
+             \end{bmatrix}
 
         * order = 2 (2D):
 
           .. math::
 
-             \bbE = [\bbDelta_{1}           0  \bbDelta_{1}  \bbDelta_{1}
-                               0  \bbDelta_{2} \bbDelta_{2} -\bbDelta_{2}]
+             \bbE
+             =
+             \begin{bmatrix}
+                \Delta_{1} & 0 & \Delta_{1} & \Delta_{1} \\
+                0 & \Delta_{2} & \Delta_{2} & -\Delta_{2}
+             \end{bmatrix}
 
         * order = 1, 2 (3D): tensor-product B-splines (trilinear, triquadratic)
 
@@ -116,13 +127,13 @@ def xrt_struct_apply(
              \quad
              k = \text{order}
 
-        The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
+        The support of :math:`\psi` and its projections can be viewed using :py:func:`~xrt_toolkit.plot_2d_basis`.
 
     data: FloatT
         (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.
     buffer: FloatT
         (L,) buffer in which to accumulate projections.
-        The (N_proj, *ray_u_spec.num) mesh-points are serialized in C-order.
+        The ``(N_proj, *ray_u_spec.num)`` mesh-points are serialized in C-order.
     weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec
         Weight along each ray (see :py:func:`~xrt_toolkit.xrt_apply`), per ray in the order of the
         projections. Arc lengths are measured from the anchors of :py:func:`struct_rays`.
@@ -186,7 +197,7 @@ def xrt_struct_adjoint(
         * ray_t_spec: ArrayNNfT
           (N_proj, D, D) homogeneous transforms :math:`\bbH_{t} = [\bbA_{t} \in \bR^{D \times (D-1)}, \bbb_{t} \in \bR^{D}]`.
         * ray_n_spec: ArrayNNfT
-          (N_proj, D, D) homogeneous transforms :math:`\bbH_{n} = [\bbA_{d} \in \bR^{D \times (D-1)}, \bbb_{d} \in \bR^{D}]`.
+          (N_proj, D, D) homogeneous transforms :math:`\bbH_{n} = [\bbA_{n} \in \bR^{D \times (D-1)}, \bbb_{n} \in \bR^{D}]`.
         * ray_u_spec: UniformSpec
           D-dim uniform mesh.
 
@@ -205,10 +216,10 @@ def xrt_struct_adjoint(
         Data interpolation order.
 
         This parameter sets which :math:`\psi` is used to interpolate data values.
-        The support of :math:`\psi` and its projections can be viewed using :func:`~xrt_toolkit.drjit.diagnostics.plot_2d_basis`.
+        The support of :math:`\psi` and its projections can be viewed using :py:func:`~xrt_toolkit.plot_2d_basis`.
     data: FloatT
         (L,) projections :math:`g_{l} \in \bR`.
-        The (N_proj, *ray_u_spec.num) mesh-points are serialized in C-order.
+        The ``(N_proj, *ray_u_spec.num)`` mesh-points are serialized in C-order.
     buffer: FloatT
         (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.
     weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec

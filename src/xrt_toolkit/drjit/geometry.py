@@ -12,14 +12,13 @@ def parallel_beam(
     r"""
     Create parallel/cylinder-beam structured ray specification.
 
-    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.drjit.xrt_struct_apply` or :py:func:`~xrt_toolkit.drjit.xrt_struct_adjoint`.
+    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.xrt_struct_apply` or :py:func:`~xrt_toolkit.xrt_struct_adjoint`.
 
     Parameters
     ----------
     angles: FloatT
-        (N_proj,) angles[rad] in the XY plane.
-
-        TODO: needs more explaining.
+        (N_proj,) view angles [rad]: view :math:`\theta` has rays along
+        :math:`(\cos\theta, \sin\theta)` in the XY plane, and its detector through the origin.
     detector_spec: DetectorSpec
         1D (width) or 2D (width, height) detector.
 
@@ -94,7 +93,7 @@ def cone_beam(
     r"""
     Create fan/cone-beam structured ray specification.
 
-    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.drjit.xrt_struct_apply` or :py:func:`~xrt_toolkit.drjit.xrt_struct_adjoint`.
+    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.xrt_struct_apply` or :py:func:`~xrt_toolkit.xrt_struct_adjoint`.
 
     Parameters
     ----------
@@ -103,9 +102,9 @@ def cone_beam(
     sdd: float
         Source-Detector-Distance (XY plane).
     angles: FloatT
-        (N_proj,) angles[rad] in the XY plane.
-
-        TODO: needs more explaining.
+        (N_proj,) view angles [rad]: at view :math:`\theta`, the source sits at
+        :math:`-\text{sod} \, (\cos\theta, \sin\theta)` in the XY plane, and the detector faces it
+        at distance `sdd`.
     detector_spec: DetectorSpec
         1D (width) or 2D (width, height) detector.
 
