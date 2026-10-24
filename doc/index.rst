@@ -46,7 +46,7 @@ makes :eq:`xrt` linear in the coefficients :math:`f_{\bbq}`:
 
    \xrt[f](\bbn, \bbt) = \sum_{\bbq} f_{\bbq} \, \xrt[\psi](\bbn, \bbt - \bbx_{\bbq}).
 
-XTK evaluates these sums along arbitrary rays, exactly, for voxels :cite:`siddon1985,amanatides1987` and for higher-order box splines and B-splines :cite:`entezari2012,haouchat2025tci,haouchat2026splinesplat`.
+XTK evaluates these sums along arbitrary rays, exactly, for voxels :cite:`siddon1985,amanatides1987` and for higher-order box splines and B-splines :cite:`entezari2012,haouchat2025tci,haouchat2025splinesplat`.
 It computes, on CPU and GPU via Dr.Jit :cite:`jakob2022drjit`:
 
 - the projections and their adjoint;
