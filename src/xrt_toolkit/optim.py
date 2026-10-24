@@ -159,8 +159,9 @@ def fbp(
     Returns
     -------
     f: FloatT
-        (Q1,...,QD) flattened C-ordered voxel values; 0 outside the field of view (voxels that
-        some view does not see).
+        (Q1,...,QD) flattened C-ordered volume coefficients, as the `data` of
+        :py:func:`~xrt_toolkit.xrt_apply`; 0 outside the field of view (voxels that some view does
+        not see).
 
     Notes
     -----
@@ -182,8 +183,8 @@ def fbp(
     q = _from_xp(xp.moveaxis(q, -1, 1), Float)
 
     r_fov = abs(u_spec.start[0]) + du / 2  # detector half-width
-    f = _backproject(q, ray_spec, knot_spec, r_fov)
-    return f * (math.pi * du / n_view)
+    f = _backproject(q, ray_spec, knot_spec, r_fov)  # density
+    return f * (math.pi * du / n_view * math.prod(knot_spec.step))
 
 
 def fdk(
@@ -211,7 +212,8 @@ def fdk(
     Returns
     -------
     f: FloatT
-        (Q1,...,QD) flattened C-ordered voxel values; 0 outside the field of view.
+        (Q1,...,QD) flattened C-ordered volume coefficients, as the `data` of
+        :py:func:`~xrt_toolkit.xrt_apply`; 0 outside the field of view.
 
     Notes
     -----
@@ -239,8 +241,8 @@ def fdk(
 
     u_half = abs(u_spec.start[0]) + du[0] / 2  # detector half-width
     r_fov = sod * u_half / math.hypot(sdd, u_half)
-    f = _backproject(q, ray_spec, knot_spec, r_fov, cone=(sod, sdd))
-    return f * (math.pi * du[0] * sdd / (n_view * sod))
+    f = _backproject(q, ray_spec, knot_spec, r_fov, cone=(sod, sdd))  # density
+    return f * (math.pi * du[0] * sdd / (n_view * sod) * math.prod(knot_spec.step))
 
 
 # Fourier filtering

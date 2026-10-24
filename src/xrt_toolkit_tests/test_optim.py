@@ -60,12 +60,14 @@ def test_cg_reconstruction():
     assert np.sqrt(np.mean((f - f_gt) ** 2)) < 0.02
 
 
-def disc_scan(D: int, N: int, n_view: int, n_det: int, size: float) -> tuple:
-    # parallel-beam projections of a disc (2D) or ball (3D) of value 1 and radius N/3
-    knot_spec = xtk.UniformSpec.centered(step=1, num=(N,) * D)
+def disc_scan(
+    D: int, N: int, n_view: int, n_det: int, size: float, step: float = 1
+) -> tuple:
+    # parallel-beam projections of a disc (2D) or ball (3D) of value 1 and radius N/3 (voxels)
+    knot_spec = xtk.UniformSpec.centered(step=step, num=(N,) * D)
     angles = Float(np.linspace(0, np.pi, n_view, endpoint=False, dtype=np.float32))
     detector = xtk.util.DetectorSpec(
-        size=(size,) * (D - 1), num_cell=(n_det,) * (D - 1)
+        size=(size * step,) * (D - 1), num_cell=(n_det,) * (D - 1)
     )
     ray_spec = xtk.parallel_beam(angles, detector)
     x = np.arange(N) - (N - 1) / 2
@@ -83,6 +85,15 @@ def test_fbp_2d(window):
     f = np.asarray(xtk.fbp(ray_spec, knot_spec, y, window)).reshape(N, N)
     assert abs(f[r < N / 4].mean() - 1) < 0.01
     assert np.sqrt(np.mean(f[r > N / 2.5] ** 2)) < 0.02
+
+
+@pytest.mark.parametrize("D", [2, 3])
+def test_fbp_step(D):
+    # with a lattice step other than 1, the result is coefficients, as xrt_apply's data
+    N = 48
+    ray_spec, knot_spec, y, r = disc_scan(D, N, 90, 72, 1.5 * N, step=2.0)
+    f = np.asarray(xtk.fbp(ray_spec, knot_spec, y)).reshape((N,) * D)
+    assert abs(f[r < N / 4].mean() - 1) < 0.02
 
 
 @pytest.mark.parametrize("n_det", [48, 192])
@@ -140,13 +151,13 @@ def test_fbp_owns_memory():
     del junk
 
 
-def ball_cone_scan(D: int, N: int, n_det: int) -> tuple:
-    # cone-beam projections (fan beam in 2D) of a disc/ball of value 1 and radius 0.3 N
-    knot_spec = xtk.UniformSpec.centered(step=1, num=(N,) * D)
+def ball_cone_scan(D: int, N: int, n_det: int, step: float = 1) -> tuple:
+    # cone-beam projections (fan beam in 2D) of a disc/ball of value 1 and radius 0.3 N (voxels)
+    knot_spec = xtk.UniformSpec.centered(step=step, num=(N,) * D)
     angles = Float(np.linspace(0, 2 * np.pi, 360, endpoint=False, dtype=np.float32))
-    size = (2.2 * N, 1.75 * N)[: D - 1]
+    size = (2.2 * N * step, 1.75 * N * step)[: D - 1]
     detector = xtk.util.DetectorSpec(size=size, num_cell=(n_det,) * (D - 1))
-    ray_spec = xtk.cone_beam(1.6 * N, 2.8 * N, angles, detector)
+    ray_spec = xtk.cone_beam(1.6 * N * step, 2.8 * N * step, angles, detector)
     x = np.arange(N) - (N - 1) / 2
     X = np.meshgrid(*(x,) * D, indexing="ij")
     f = (sum(c**2 for c in X) < (0.3 * N) ** 2).astype(np.float32)
@@ -172,3 +183,13 @@ def test_fdk_3d():
     for cx, cz, tol in ((0, 0, 0.004), (0.15 * N, 0, 0.006), (0, 0.15 * N, 0.02)):
         m = (X - cx) ** 2 + Y**2 + (Z - cz) ** 2 < (0.07 * N) ** 2
         assert abs(f[m].mean() - 1) < tol
+
+
+@pytest.mark.parametrize("D", [2, 3])
+def test_fdk_step(D):
+    # with a lattice step other than 1, the result is coefficients, as xrt_apply's data
+    N = 48
+    ray_spec, knot_spec, y, X = ball_cone_scan(D, N, 96, step=2.0)
+    f = np.asarray(xtk.fdk(ray_spec, knot_spec, y)).reshape((N,) * D)
+    r = np.sqrt(sum(c**2 for c in X))
+    assert abs(f[r < 0.2 * N].mean() - 1) < 0.02
