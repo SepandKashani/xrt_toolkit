@@ -5,6 +5,7 @@ XRT Toolkit
    :maxdepth: 4
    :hidden:
 
+   geometry
    api
    references
 
@@ -33,7 +34,7 @@ Tomography measures line integrals of a function :math:`f: \bR^{D} \to \bR`, :ma
 
    \xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) \, d\alpha,
 
-along rays with anchors :math:`\bbt \in \bR^{D}` and unit directions :math:`\bbn \in \bR^{D}`.
+along rays with anchors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}` (normalised by XTK).
 Expanding :math:`f` in shifts of a basis function :math:`\psi` on a uniform lattice
 
 .. math::
