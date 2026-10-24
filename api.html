@@ -6,11 +6,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>API Reference &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <title>API Reference &#8212; XRT Toolkit 0.1.dev114 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
     <link rel="stylesheet" type="text/css" href="_static/bizstyle.css?v=5283bb3d" />
     
-    <script src="_static/documentation_options.js?v=1c57b938"></script>
+    <script src="_static/documentation_options.js?v=445e2786"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script>window.MathJax = {"tex": {"macros": {"bbA": "{\\bf{A}}", "bbb": "{\\bf{b}}", "bbe": "{\\bf{e}}", "bbE": "{\\bf{E}}", "bbH": "{\\bf{H}}", "bbI": "{\\bf{I}}", "bbm": "{\\bf{m}}", "bbn": "{\\bf{n}}", "bbq": "{\\bf{q}}", "bbQ": "{\\bf{Q}}", "bbt": "{\\bf{t}}", "bbu": "{\\bf{u}}", "bbx": "{\\bf{x}}", "bbDelta": "{\\boldsymbol{\\Delta}}", "bbZero": "{\\bf{0}}", "bR": "{\\mathbb{R}}", "discreteRange": ["\\lbrack\\!\\lbrack #1 \\rbrack\\!\\rbrack", 1], "diag": "\\operatorname*{diag}", "xrt": "\\mathcal{P}"}}}</script>
@@ -19,7 +19,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="References" href="references.html" />
-    <link rel="prev" title="XRT Toolkit" href="index.html" />
+    <link rel="prev" title="Geometry" href="geometry.html" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <!--[if lt IE 9]>
     <script src="_static/css3-mediaqueries.js"></script>
@@ -35,9 +35,9 @@
           <a href="references.html" title="References"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="index.html" title="XRT Toolkit"
+          <a href="geometry.html" title="Geometry"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev114 documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">API Reference</a></li> 
       </ul>
     </div>  
@@ -75,7 +75,7 @@ f_{\bbq} \psi(\bbx - \bbx_{\bbq}),\]</div>
 \quad
 \bbDelta \in \bR_{+}^{D},\]</div>
 <p>and <span class="math notranslate nohighlight">\(\psi\)</span> a box spline with direction vectors
-<span class="math notranslate nohighlight">\(\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}\)</span>.</p>
+<span class="math notranslate nohighlight">\(\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}\)</span>, of unit integral.</p>
 <p>Then <code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code> computes samples of</p>
 <div class="math notranslate nohighlight">
 \[\xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) d\alpha\]</div>
@@ -113,6 +113,7 @@ f_{\bbq} \psi(\bbx - \bbx_{\bbq}),\]</div>
 <div class="math notranslate nohighlight">
 \[\psi(\bbx)
 =
+\frac{1}{\Delta_{1} \Delta_{2} \Delta_{3}}
 \beta^{k}(x_{1} / \Delta_{1})
 \beta^{k}(x_{2} / \Delta_{2})
 \beta^{k}(x_{3} / \Delta_{3}),
@@ -145,7 +146,9 @@ k = \text{order}\]</div>
 <dt class="sig sig-object py" id="xrt_toolkit.xrt_adjoint">
 <span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">xrt_adjoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/ray_xrt.html#xrt_adjoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.xrt_adjoint" title="Link to this definition">¶</a></dt>
 <dd><p>Compute 2D/3D back-projections.</p>
-<p>Adjoint of <code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code>: maps projection weights to volume expansion coefficients.</p>
+<p>Adjoint of <code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code>: maps projection weights to volume expansion coefficients.
+It is the exact transpose, <span class="math notranslate nohighlight">\(\langle A f, y \rangle = \langle f, A^{T} y \rangle\)</span> up to
+rounding: the same rays meet the same basis functions with the same weights.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -251,7 +254,7 @@ f_{\bbq} \psi(\bbx - \bbx_{\bbq}),\]</div>
 \quad
 \bbDelta \in \bR_{+}^{D},\]</div>
 <p>and <span class="math notranslate nohighlight">\(\psi\)</span> a box spline with direction vectors
-<span class="math notranslate nohighlight">\(\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}\)</span>.</p>
+<span class="math notranslate nohighlight">\(\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}\)</span>, of unit integral.</p>
 <p>Then <code class="docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code> computes samples of</p>
 <div class="math notranslate nohighlight">
 \[\xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) d\alpha\]</div>
@@ -305,6 +308,7 @@ Then <cite>ray_spec</cite> encodes rays of the form</p>
 <div class="math notranslate nohighlight">
 \[\psi(\bbx)
 =
+\frac{1}{\Delta_{1} \Delta_{2} \Delta_{3}}
 \beta^{k}(x_{1} / \Delta_{1})
 \beta^{k}(x_{2} / \Delta_{2})
 \beta^{k}(x_{3} / \Delta_{3}),
@@ -336,7 +340,9 @@ projections. Arc lengths are measured from the anchors of <a class="reference in
 <dt class="sig sig-object py" id="xrt_toolkit.xrt_struct_adjoint">
 <span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">xrt_struct_adjoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/struct_xrt.html#xrt_struct_adjoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.xrt_struct_adjoint" title="Link to this definition">¶</a></dt>
 <dd><p>Compute 2D/3D structured back-projections.</p>
-<p>Adjoint of <code class="docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code>: maps projection weights to volume expansion coefficients.</p>
+<p>Adjoint of <code class="docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code>: maps projection weights to volume expansion coefficients.
+It is the exact transpose, <span class="math notranslate nohighlight">\(\langle A f, y \rangle = \langle f, A^{T} y \rangle\)</span> up to
+rounding: the same rays meet the same basis functions with the same weights.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -958,6 +964,7 @@ A 2D size denotes detector (width, height).</p>
         <div class="sphinxsidebarwrapper">
 <h3><a href="index.html">Table of Contents</a></h3>
 <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="geometry.html">Geometry</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#x-ray-transforms">X-Ray Transforms</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.xrt_apply"><code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a></li>
@@ -1022,8 +1029,8 @@ A 2D size denotes detector (width, height).</p>
 
   <div>
     <h4>Previous topic</h4>
-    <p class="topless"><a href="index.html"
-                          title="previous chapter">XRT Toolkit</a></p>
+    <p class="topless"><a href="geometry.html"
+                          title="previous chapter">Geometry</a></p>
   </div>
   <div>
     <h4>Next topic</h4>
@@ -1054,9 +1061,9 @@ A 2D size denotes detector (width, height).</p>
           <a href="references.html" title="References"
              >next</a> |</li>
         <li class="right" >
-          <a href="index.html" title="XRT Toolkit"
+          <a href="geometry.html" title="Geometry"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev114 documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">API Reference</a></li> 
       </ul>
     </div>

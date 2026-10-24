@@ -1,0 +1,246 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Geometry &#8212; XRT Toolkit 0.1.dev114 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="_static/documentation_options.js?v=445e2786"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script>window.MathJax = {"tex": {"macros": {"bbA": "{\\bf{A}}", "bbb": "{\\bf{b}}", "bbe": "{\\bf{e}}", "bbE": "{\\bf{E}}", "bbH": "{\\bf{H}}", "bbI": "{\\bf{I}}", "bbm": "{\\bf{m}}", "bbn": "{\\bf{n}}", "bbq": "{\\bf{q}}", "bbQ": "{\\bf{Q}}", "bbt": "{\\bf{t}}", "bbu": "{\\bf{u}}", "bbx": "{\\bf{x}}", "bbDelta": "{\\boldsymbol{\\Delta}}", "bbZero": "{\\bf{0}}", "bR": "{\\mathbb{R}}", "discreteRange": ["\\lbrack\\!\\lbrack #1 \\rbrack\\!\\rbrack", 1], "diag": "\\operatorname*{diag}", "xrt": "\\mathcal{P}"}}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API Reference" href="api.html" />
+    <link rel="prev" title="XRT Toolkit" href="index.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="api.html" title="API Reference"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="XRT Toolkit"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev114 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Geometry</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="geometry">
+<h1>Geometry<a class="headerlink" href="#geometry" title="Link to this heading">¶</a></h1>
+<p>Conventions shared by all operators, and the standard scans.</p>
+<section id="volume">
+<h2>Volume<a class="headerlink" href="#volume" title="Link to this heading">¶</a></h2>
+<figure class="align-default" id="id1">
+<img alt="_images/volume.svg" src="_images/volume.svg" />
+<figcaption>
+<p><span class="caption-text">A 2D lattice with <code class="docutils literal notranslate"><span class="pre">num</span> <span class="pre">=</span> <span class="pre">(4,</span> <span class="pre">3)</span></code>: knots (dots), and the index of each coefficient in the flat
+array (grey).</span><a class="headerlink" href="#id1" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p><a class="reference internal" href="api.html#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">UniformSpec</span></code></a> defines the knots <span class="math notranslate nohighlight">\(\bbx_{\bbq} = \bbx_{0} + \bbq \odot \bbDelta\)</span>, with <code class="docutils literal notranslate"><span class="pre">start</span></code> <span class="math notranslate nohighlight">\(= \bbx_{0}\)</span>, <code class="docutils literal notranslate"><span class="pre">step</span></code> <span class="math notranslate nohighlight">\(= \bbDelta\)</span> and <code class="docutils literal notranslate"><span class="pre">num</span></code> <span class="math notranslate nohighlight">\(= \bbQ\)</span>.
+At order 0, each knot is the centre of its voxel.</p>
+<p>A volume is the flat C-ordered array of its coefficients <span class="math notranslate nohighlight">\(f_{\bbq}\)</span>, indexed <span class="math notranslate nohighlight">\((x, y[, z])\)</span>: the last axis is the fastest.
+A NumPy array <code class="docutils literal notranslate"><span class="pre">f</span></code> of shape <code class="docutils literal notranslate"><span class="pre">num</span></code> is passed as <code class="docutils literal notranslate"><span class="pre">f.ravel()</span></code>.</p>
+<p>The standard scans rotate about the origin: center the lattice on it with <a class="reference internal" href="api.html#xrt_toolkit.UniformSpec.centered" title="xrt_toolkit.UniformSpec.centered"><code class="xref py py-meth docutils literal notranslate"><span class="pre">UniformSpec.centered()</span></code></a>.</p>
+</section>
+<section id="basis-functions">
+<h2>Basis functions<a class="headerlink" href="#basis-functions" title="Link to this heading">¶</a></h2>
+<figure class="align-default" id="id2">
+<img alt="_images/basis.svg" src="_images/basis.svg" />
+<figcaption>
+<p><span class="caption-text">The 2D basis functions <span class="math notranslate nohighlight">\(\psi\)</span> on the lattice.</span><a class="headerlink" href="#id2" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p><code class="docutils literal notranslate"><span class="pre">order</span></code> selects <span class="math notranslate nohighlight">\(\psi\)</span>: voxels (0), or smoother splines (1, 2).
+In 2D they are box splines, in 3D tensor-product B-splines (see <a class="reference internal" href="api.html#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a>).</p>
+<p>Every <span class="math notranslate nohighlight">\(\psi\)</span> has unit integral: <span class="math notranslate nohighlight">\(f_{\bbq}\)</span> is the mass of <span class="math notranslate nohighlight">\(f\)</span> around <span class="math notranslate nohighlight">\(\bbx_{\bbq}\)</span>, and <span class="math notranslate nohighlight">\(f_{\bbq} / (\Delta_{1} \cdots \Delta_{D})\)</span> its density.</p>
+</section>
+<section id="rays">
+<h2>Rays<a class="headerlink" href="#rays" title="Link to this heading">¶</a></h2>
+<figure class="align-default" id="id3">
+<img alt="_images/ray.svg" src="_images/ray.svg" />
+<figcaption>
+<p><span class="caption-text">A ray: anchor <span class="math notranslate nohighlight">\(\bbt\)</span> and direction <span class="math notranslate nohighlight">\(\bbn\)</span>.</span><a class="headerlink" href="#id3" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p><a class="reference internal" href="api.html#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a> integrates <span class="math notranslate nohighlight">\(f\)</span> along the whole line <span class="math notranslate nohighlight">\(\{\bbt + \alpha \bbn : \alpha \in \bR\}\)</span>, by arc length:</p>
+<ul class="simple">
+<li><p>the anchor can be anywhere on the line, inside or outside the volume;</p></li>
+<li><p>the direction can have any non-zero length.</p></li>
+</ul>
+<p>Rays are passed as two (D, L) arrays, one column per ray:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">drjit</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dr</span><span class="o">,</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">drjit.cuda</span><span class="w"> </span><span class="kn">import</span> <span class="n">Array2f</span><span class="p">,</span> <span class="n">Float</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">xrt_toolkit</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xtk</span>
+
+<span class="n">t</span> <span class="o">=</span> <span class="n">Array2f</span><span class="p">(</span><span class="n">t_x</span><span class="p">,</span> <span class="n">t_y</span><span class="p">)</span>  <span class="c1"># (2, L) anchors</span>
+<span class="n">n</span> <span class="o">=</span> <span class="n">Array2f</span><span class="p">(</span><span class="n">n_x</span><span class="p">,</span> <span class="n">n_y</span><span class="p">)</span>  <span class="c1"># (2, L) directions</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">xtk</span><span class="o">.</span><span class="n">xrt_apply</span><span class="p">((</span><span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">Float</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">ravel</span><span class="p">()))</span>
+</pre></div>
+</div>
+</section>
+<section id="detector">
+<h2>Detector<a class="headerlink" href="#detector" title="Link to this heading">¶</a></h2>
+<figure class="align-default" id="id4">
+<img alt="_images/detector.svg" src="_images/detector.svg" />
+<figcaption>
+<p><span class="caption-text">Left: a 1D detector with <code class="docutils literal notranslate"><span class="pre">num_cell</span> <span class="pre">=</span> <span class="pre">4</span></code>. Right: a 2D detector with <code class="docutils literal notranslate"><span class="pre">num_cell</span> <span class="pre">=</span> <span class="pre">(4,</span> <span class="pre">2)</span></code>, and
+the order of its cells in the projections.</span><a class="headerlink" href="#id4" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p><a class="reference internal" href="api.html#xrt_toolkit.util.DetectorSpec" title="xrt_toolkit.util.DetectorSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">DetectorSpec</span></code></a> gives the full <code class="docutils literal notranslate"><span class="pre">size</span></code> of the detector (not its pitch) and its <code class="docutils literal notranslate"><span class="pre">num_cell</span></code>.
+Cells are centred: cell <span class="math notranslate nohighlight">\(i\)</span> of <span class="math notranslate nohighlight">\(N\)</span> sits at <span class="math notranslate nohighlight">\(u = (i - (N - 1) / 2) \, \text{size} / N\)</span>.
+With an even <code class="docutils literal notranslate"><span class="pre">num_cell</span></code>, <span class="math notranslate nohighlight">\(u = 0\)</span> falls between two cells.</p>
+</section>
+<section id="parallel-beam">
+<h2>Parallel beam<a class="headerlink" href="#parallel-beam" title="Link to this heading">¶</a></h2>
+<figure class="align-default" id="id5">
+<img alt="_images/parallel.svg" src="_images/parallel.svg" />
+<figcaption>
+<p><span class="caption-text">View <span class="math notranslate nohighlight">\(\theta\)</span> of <a class="reference internal" href="api.html#xrt_toolkit.parallel_beam" title="xrt_toolkit.parallel_beam"><code class="xref py py-func docutils literal notranslate"><span class="pre">parallel_beam()</span></code></a>.</span><a class="headerlink" href="#id5" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p>View <span class="math notranslate nohighlight">\(\theta\)</span> has rays along <span class="math notranslate nohighlight">\(\bbn = (\cos\theta, \sin\theta[, 0])\)</span>.
+Its detector passes through the origin, with <span class="math notranslate nohighlight">\(u_{1}\)</span> along <span class="math notranslate nohighlight">\((-\sin\theta, \cos\theta[, 0])\)</span> and, in 3D, <span class="math notranslate nohighlight">\(u_{2}\)</span> along <span class="math notranslate nohighlight">\(z\)</span>, the rotation axis.
+Angles cover <span class="math notranslate nohighlight">\([0, \pi)\)</span>: view <span class="math notranslate nohighlight">\(\theta + \pi\)</span> sees the same lines as view <span class="math notranslate nohighlight">\(\theta\)</span>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">knot_spec</span> <span class="o">=</span> <span class="n">xtk</span><span class="o">.</span><span class="n">UniformSpec</span><span class="o">.</span><span class="n">centered</span><span class="p">(</span><span class="n">step</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">num</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">))</span>
+<span class="n">det</span> <span class="o">=</span> <span class="n">xtk</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">DetectorSpec</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mf">1.5</span> <span class="o">*</span> <span class="n">N</span><span class="p">,</span> <span class="n">N</span><span class="p">),</span> <span class="n">num_cell</span><span class="o">=</span><span class="p">(</span><span class="mi">192</span><span class="p">,</span> <span class="mi">128</span><span class="p">))</span>
+<span class="n">angles</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span> <span class="mi">180</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">rays</span> <span class="o">=</span> <span class="n">xtk</span><span class="o">.</span><span class="n">parallel_beam</span><span class="p">(</span><span class="n">angles</span><span class="p">,</span> <span class="n">det</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">xtk</span><span class="o">.</span><span class="n">xrt_struct_apply</span><span class="p">(</span><span class="n">rays</span><span class="p">,</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">Float</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">ravel</span><span class="p">()))</span>
+</pre></div>
+</div>
+</section>
+<section id="cone-beam">
+<h2>Cone beam<a class="headerlink" href="#cone-beam" title="Link to this heading">¶</a></h2>
+<figure class="align-default" id="id6">
+<img alt="_images/cone.svg" src="_images/cone.svg" />
+<figcaption>
+<p><span class="caption-text">View <span class="math notranslate nohighlight">\(\theta = 0\)</span> of <a class="reference internal" href="api.html#xrt_toolkit.cone_beam" title="xrt_toolkit.cone_beam"><code class="xref py py-func docutils literal notranslate"><span class="pre">cone_beam()</span></code></a>.</span><a class="headerlink" href="#id6" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<figure class="align-default" id="id7">
+<img alt="_images/cone3d.svg" src="_images/cone3d.svg" />
+<figcaption>
+<p><span class="caption-text">The same view in 3D.</span><a class="headerlink" href="#id7" title="Link to this image">¶</a></p>
+</figcaption>
+</figure>
+<p>The source sits at <span class="math notranslate nohighlight">\(-\text{sod} \, (\cos\theta, \sin\theta[, 0])\)</span>.
+The detector faces it at distance <code class="docutils literal notranslate"><span class="pre">sdd</span></code>, with <span class="math notranslate nohighlight">\(u_{1}\)</span> and <span class="math notranslate nohighlight">\(u_{2}\)</span> as in parallel beam.
+It must cover the volume magnified by <span class="math notranslate nohighlight">\(\text{sdd} / \text{sod}\)</span>.
+Angles cover <span class="math notranslate nohighlight">\([0, 2\pi)\)</span>: views <span class="math notranslate nohighlight">\(\theta\)</span> and <span class="math notranslate nohighlight">\(\theta + \pi\)</span> see different lines.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">det</span> <span class="o">=</span> <span class="n">xtk</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">DetectorSpec</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mf">2.5</span> <span class="o">*</span> <span class="n">N</span><span class="p">,</span> <span class="mf">2.5</span> <span class="o">*</span> <span class="n">N</span><span class="p">),</span> <span class="n">num_cell</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+<span class="n">angles</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span> <span class="mi">360</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">rays</span> <span class="o">=</span> <span class="n">xtk</span><span class="o">.</span><span class="n">cone_beam</span><span class="p">(</span><span class="n">sod</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="n">N</span><span class="p">,</span> <span class="n">sdd</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="n">N</span><span class="p">,</span> <span class="n">angles</span><span class="o">=</span><span class="n">angles</span><span class="p">,</span> <span class="n">detector_spec</span><span class="o">=</span><span class="n">det</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="projection-layout">
+<h2>Projection layout<a class="headerlink" href="#projection-layout" title="Link to this heading">¶</a></h2>
+<p>The structured operators order their projections <code class="docutils literal notranslate"><span class="pre">(view,</span> <span class="pre">u1[,</span> <span class="pre">u2])</span></code>, the last axis fastest: <code class="docutils literal notranslate"><span class="pre">y</span></code> reshapes to <code class="docutils literal notranslate"><span class="pre">(len(angles),</span> <span class="pre">*num_cell)</span></code>.
+<a class="reference internal" href="api.html#xrt_toolkit.struct_rays" title="xrt_toolkit.struct_rays"><code class="xref py py-func docutils literal notranslate"><span class="pre">struct_rays()</span></code></a> returns the same rays, in the same order.</p>
+</section>
+<section id="units">
+<h2>Units<a class="headerlink" href="#units" title="Link to this heading">¶</a></h2>
+<p>All lengths share one unit: <code class="docutils literal notranslate"><span class="pre">knot_spec</span></code>, <code class="docutils literal notranslate"><span class="pre">DetectorSpec.size</span></code>, <code class="docutils literal notranslate"><span class="pre">sod</span></code>, <code class="docutils literal notranslate"><span class="pre">sdd</span></code> and the rays.
+Work in voxel units (<code class="docutils literal notranslate"><span class="pre">step</span> <span class="pre">=</span> <span class="pre">1</span></code>):</p>
+<ul class="simple">
+<li><p>coefficients and densities coincide;</p></li>
+<li><p>in float32, other units lose accuracy (up to a few % at <code class="docutils literal notranslate"><span class="pre">step</span> <span class="pre">=</span> <span class="pre">0.0025</span></code>).</p></li>
+</ul>
+<p>For a scan in millimetres with voxel size <span class="math notranslate nohighlight">\(s\)</span>, divide all lengths by <span class="math notranslate nohighlight">\(s\)</span>.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="index.html">Table of Contents</a></h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Geometry</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#volume">Volume</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#basis-functions">Basis functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#rays">Rays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#detector">Detector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#parallel-beam">Parallel beam</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cone-beam">Cone beam</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#projection-layout">Projection layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#units">Units</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">References</a></li>
+</ul>
+
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="index.html"
+                          title="previous chapter">XRT Toolkit</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="api.html"
+                          title="next chapter">API Reference</a></p>
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="api.html" title="API Reference"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="XRT Toolkit"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev114 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Geometry</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>

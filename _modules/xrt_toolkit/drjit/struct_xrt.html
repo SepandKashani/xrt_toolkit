@@ -5,11 +5,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>xrt_toolkit.drjit.struct_xrt &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <title>xrt_toolkit.drjit.struct_xrt &#8212; XRT Toolkit 0.1.dev114 documentation</title>
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d75fae25" />
     <link rel="stylesheet" type="text/css" href="../../../_static/bizstyle.css?v=5283bb3d" />
     
-    <script src="../../../_static/documentation_options.js?v=1c57b938"></script>
+    <script src="../../../_static/documentation_options.js?v=445e2786"></script>
     <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/bizstyle.js"></script>
@@ -26,7 +26,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../../../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev114 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">xrt_toolkit.drjit.struct_xrt</a></li> 
       </ul>
@@ -89,7 +89,7 @@
 <span class="sd">       \bbDelta \in \bR_{+}^{D},</span>
 
 <span class="sd">    and :math:`\psi` a box spline with direction vectors</span>
-<span class="sd">    :math:`\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}`.</span>
+<span class="sd">    :math:`\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}`, of unit integral.</span>
 
 <span class="sd">    Then ``xrt_struct_apply()`` computes samples of</span>
 
@@ -161,6 +161,7 @@
 
 <span class="sd">             \psi(\bbx)</span>
 <span class="sd">             =</span>
+<span class="sd">             \frac{1}{\Delta_{1} \Delta_{2} \Delta_{3}}</span>
 <span class="sd">             \beta^{k}(x_{1} / \Delta_{1})</span>
 <span class="sd">             \beta^{k}(x_{2} / \Delta_{2})</span>
 <span class="sd">             \beta^{k}(x_{3} / \Delta_{3}),</span>
@@ -231,6 +232,8 @@
 <span class="sd">    Compute 2D/3D structured back-projections.</span>
 
 <span class="sd">    Adjoint of ``xrt_struct_apply()``: maps projection weights to volume expansion coefficients.</span>
+<span class="sd">    It is the exact transpose, :math:`\langle A f, y \rangle = \langle f, A^{T} y \rangle` up to</span>
+<span class="sd">    rounding: the same rays meet the same basis functions with the same weights.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -364,6 +367,7 @@
         <div class="sphinxsidebarwrapper">
 <h3><a href="../../../index.html">Table of Contents</a></h3>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../geometry.html">Geometry</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
 </ul>
@@ -388,7 +392,7 @@
         <li class="right" style="margin-right: 10px">
           <a href="../../../genindex.html" title="General Index"
              >index</a></li>
-        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev114 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">xrt_toolkit.drjit.struct_xrt</a></li> 
       </ul>

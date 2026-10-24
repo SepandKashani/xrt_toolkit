@@ -5,6 +5,7 @@ XRT Toolkit
    :maxdepth: 4
    :hidden:
 
+   geometry
    api
    references
 
@@ -33,7 +34,7 @@ Tomography measures line integrals of a function :math:`f: \bR^{D} \to \bR`, :ma
 
    \xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) \, d\alpha,
 
-along rays with anchors :math:`\bbt \in \bR^{D}` and unit directions :math:`\bbn \in \bR^{D}`.
+along rays with anchors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}` (normalised by XTK).
 Expanding :math:`f` in shifts of a basis function :math:`\psi` on a uniform lattice
 
 .. math::
@@ -46,7 +47,7 @@ makes :eq:`xrt` linear in the coefficients :math:`f_{\bbq}`:
 
    \xrt[f](\bbn, \bbt) = \sum_{\bbq} f_{\bbq} \, \xrt[\psi](\bbn, \bbt - \bbx_{\bbq}).
 
-XTK evaluates these sums along arbitrary rays, exactly, for voxels :cite:`siddon1985,amanatides1987` and for higher-order box splines and B-splines :cite:`entezari2012,haouchat2025tci,haouchat2026splinesplat`.
+XTK evaluates these sums along arbitrary rays, exactly, for voxels :cite:`siddon1985,amanatides1987` and for higher-order box splines and B-splines :cite:`entezari2012,haouchat2025tci,haouchat2025splinesplat`.
 It computes, on CPU and GPU via Dr.Jit :cite:`jakob2022drjit`:
 
 - the projections and their adjoint;
