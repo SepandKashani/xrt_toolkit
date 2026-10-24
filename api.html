@@ -1,0 +1,1068 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>API Reference &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="_static/documentation_options.js?v=1c57b938"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script>window.MathJax = {"tex": {"macros": {"bbA": "{\\bf{A}}", "bbb": "{\\bf{b}}", "bbe": "{\\bf{e}}", "bbE": "{\\bf{E}}", "bbH": "{\\bf{H}}", "bbI": "{\\bf{I}}", "bbm": "{\\bf{m}}", "bbn": "{\\bf{n}}", "bbq": "{\\bf{q}}", "bbQ": "{\\bf{Q}}", "bbt": "{\\bf{t}}", "bbu": "{\\bf{u}}", "bbx": "{\\bf{x}}", "bbDelta": "{\\boldsymbol{\\Delta}}", "bbZero": "{\\bf{0}}", "bR": "{\\mathbb{R}}", "discreteRange": ["\\lbrack\\!\\lbrack #1 \\rbrack\\!\\rbrack", 1], "diag": "\\operatorname*{diag}", "xrt": "\\mathcal{P}"}}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="References" href="references.html" />
+    <link rel="prev" title="XRT Toolkit" href="index.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="references.html" title="References"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="XRT Toolkit"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">API Reference</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="api-reference">
+<h1>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading">¶</a></h1>
+<p>The XTK API operates on <a class="reference external" href="https://drjit.readthedocs.io/">Dr.Jit</a> arrays, on CPU (<code class="docutils literal notranslate"><span class="pre">drjit.llvm</span></code>) or GPU (<code class="docutils literal notranslate"><span class="pre">drjit.cuda</span></code>).
+Volumes are flattened C-ordered coefficient arrays on a <a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">UniformSpec</span></code></a> lattice.
+Rays are (anchor, direction) array pairs.
+<a class="reference internal" href="#xrt_toolkit.asarray" title="xrt_toolkit.asarray"><code class="xref py py-func docutils literal notranslate"><span class="pre">asarray()</span></code></a> converts NumPy, CuPy, PyTorch and JAX arrays.</p>
+<section id="x-ray-transforms">
+<h2>X-Ray Transforms<a class="headerlink" href="#x-ray-transforms" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.xrt_apply">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">xrt_apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/ray_xrt.html#xrt_apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.xrt_apply" title="Link to this definition">¶</a></dt>
+<dd><p>Compute 2D/3D projections.</p>
+<p>Let <span class="math notranslate nohighlight">\(f: \bR^{D} \to \bR\)</span> such that</p>
+<div class="math notranslate nohighlight">
+\[f(\bbx)
+=
+\sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+f_{\bbq} \psi(\bbx - \bbx_{\bbq}),\]</div>
+<p>with</p>
+<div class="math notranslate nohighlight">
+\[f_{\bbq} \in \bR,
+\qquad
+\bbx_{\bbq} = \bbx_{0} + \bbq \odot \bbDelta,
+\qquad
+\bbx_{0} \in \bR^{D},
+\quad
+\bbDelta \in \bR_{+}^{D},\]</div>
+<p>and <span class="math notranslate nohighlight">\(\psi\)</span> a box spline with direction vectors
+<span class="math notranslate nohighlight">\(\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}\)</span>.</p>
+<p>Then <code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code> computes samples of</p>
+<div class="math notranslate nohighlight">
+\[\xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) d\alpha\]</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNfT</em><em>, </em><em>ArrayNfT</em><em>]</em>) – (L,) ray anchors <span class="math notranslate nohighlight">\(\bbt \in \bR^{D}\)</span> and directions <span class="math notranslate nohighlight">\(\bbn \in \bR^{D}\)</span>.</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume properties <span class="math notranslate nohighlight">\((\bbx_{0}, \bbDelta, \bbQ)\)</span>.</p></li>
+<li><p><strong>order</strong> (<em>0</em><em> | </em><em>1</em><em> | </em><em>2</em>) – <p>Data interpolation order.</p>
+<p>This parameter sets which <span class="math notranslate nohighlight">\(\psi\)</span> is used to interpolate data values:</p>
+<ul>
+<li><p>order = 0 (2D, 3D):</p>
+<div class="math notranslate nohighlight">
+\[\bbE = \diag(\bbDelta)\]</div>
+</li>
+<li><p>order = 1 (2D):</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\bbE
+=
+\begin{bmatrix}
+   \Delta_{1} &amp; 0 &amp; \Delta_{1} \\
+   0 &amp; \Delta_{2} &amp; \Delta_{2}
+\end{bmatrix}\end{split}\]</div>
+</li>
+<li><p>order = 2 (2D):</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\bbE
+=
+\begin{bmatrix}
+   \Delta_{1} &amp; 0 &amp; \Delta_{1} &amp; \Delta_{1} \\
+   0 &amp; \Delta_{2} &amp; \Delta_{2} &amp; -\Delta_{2}
+\end{bmatrix}\end{split}\]</div>
+</li>
+<li><p>order = 1, 2 (3D): tensor-product B-splines (trilinear, triquadratic)</p>
+<div class="math notranslate nohighlight">
+\[\psi(\bbx)
+=
+\beta^{k}(x_{1} / \Delta_{1})
+\beta^{k}(x_{2} / \Delta_{2})
+\beta^{k}(x_{3} / \Delta_{3}),
+\quad
+\beta^{k} = \mathbb{1}_{[-1/2, 1/2]}^{\ast (k+1)},
+\quad
+k = \text{order}\]</div>
+</li>
+</ul>
+<p>The support of <span class="math notranslate nohighlight">\(\psi\)</span> and its projections can be viewed using <a class="reference internal" href="#xrt_toolkit.plot_2d_basis" title="xrt_toolkit.plot_2d_basis"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_2d_basis()</span></code></a>.</p>
+</p></li>
+<li><p><strong>data</strong> (<em>FloatT</em>) – (Q1,…,QD) flattened C-ordered volume weights <span class="math notranslate nohighlight">\(f_{\bbq} \in \bR\)</span>.</p></li>
+<li><p><strong>buffer</strong> (<em>FloatT</em>) – (L,) buffer in which to accumulate projections.</p></li>
+<li><p><strong>weight</strong> (<a class="reference internal" href="#xrt_toolkit.TOFSpec" title="xrt_toolkit.TOFSpec"><em>TOFSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.PolynomialWeightSpec" title="xrt_toolkit.PolynomialWeightSpec"><em>PolynomialWeightSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.TabulatedWeightSpec" title="xrt_toolkit.TabulatedWeightSpec"><em>TabulatedWeightSpec</em></a>) – Weight along each ray: the line integral becomes <span class="math notranslate nohighlight">\(\int_{\bR} f(\bbt + \alpha
+\hat{\bbn}) w(\alpha) d\alpha\)</span>, with <span class="math notranslate nohighlight">\(\alpha\)</span> the arc length from the anchor.
+(See <a class="reference internal" href="#xrt_toolkit.TOFSpec" title="xrt_toolkit.TOFSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">TOFSpec</span></code></a>, <a class="reference internal" href="#xrt_toolkit.PolynomialWeightSpec" title="xrt_toolkit.PolynomialWeightSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">PolynomialWeightSpec</span></code></a>,
+<a class="reference internal" href="#xrt_toolkit.TabulatedWeightSpec" title="xrt_toolkit.TabulatedWeightSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">TabulatedWeightSpec</span></code></a>.)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>proj</strong> – (L,) projections <span class="math notranslate nohighlight">\(\xrt[f] \in \bR\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.xrt_adjoint">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">xrt_adjoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/ray_xrt.html#xrt_adjoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.xrt_adjoint" title="Link to this definition">¶</a></dt>
+<dd><p>Compute 2D/3D back-projections.</p>
+<p>Adjoint of <code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code>: maps projection weights to volume expansion coefficients.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNfT</em><em>, </em><em>ArrayNfT</em><em>]</em>) – (L,) ray anchors <span class="math notranslate nohighlight">\(\bbt \in \bR^{D}\)</span> and directions <span class="math notranslate nohighlight">\(\bbn \in \bR^{D}\)</span>.</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume properties <span class="math notranslate nohighlight">\((\bbx_{0}, \bbDelta, \bbQ)\)</span>.</p></li>
+<li><p><strong>order</strong> (<em>0</em><em> | </em><em>1</em><em> | </em><em>2</em>) – <p>Data interpolation order.</p>
+<p>This parameter sets which <span class="math notranslate nohighlight">\(\psi\)</span> is used to interpolate data values.
+The support of <span class="math notranslate nohighlight">\(\psi\)</span> and its projections can be viewed using <a class="reference internal" href="#xrt_toolkit.plot_2d_basis" title="xrt_toolkit.plot_2d_basis"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_2d_basis()</span></code></a>.</p>
+</p></li>
+<li><p><strong>data</strong> (<em>FloatT</em>) – (L,) projections <span class="math notranslate nohighlight">\(g_{l} \in \bR\)</span>.</p></li>
+<li><p><strong>buffer</strong> (<em>FloatT</em>) – (Q1,…,QD) flattened buffer in which to accumulate back-projected weights <span class="math notranslate nohighlight">\(f_{\bbq} \in \bR\)</span>.</p></li>
+<li><p><strong>weight</strong> (<a class="reference internal" href="#xrt_toolkit.TOFSpec" title="xrt_toolkit.TOFSpec"><em>TOFSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.PolynomialWeightSpec" title="xrt_toolkit.PolynomialWeightSpec"><em>PolynomialWeightSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.TabulatedWeightSpec" title="xrt_toolkit.TabulatedWeightSpec"><em>TabulatedWeightSpec</em></a>) – Weight along each ray: the line integral becomes <span class="math notranslate nohighlight">\(\int_{\bR} f(\bbt + \alpha
+\hat{\bbn}) w(\alpha) d\alpha\)</span>, with <span class="math notranslate nohighlight">\(\alpha\)</span> the arc length from the anchor.
+(See <a class="reference internal" href="#xrt_toolkit.TOFSpec" title="xrt_toolkit.TOFSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">TOFSpec</span></code></a>, <a class="reference internal" href="#xrt_toolkit.PolynomialWeightSpec" title="xrt_toolkit.PolynomialWeightSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">PolynomialWeightSpec</span></code></a>,
+<a class="reference internal" href="#xrt_toolkit.TabulatedWeightSpec" title="xrt_toolkit.TabulatedWeightSpec"><code class="xref py py-class docutils literal notranslate"><span class="pre">TabulatedWeightSpec</span></code></a>.)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>b_proj</strong> – (Q1,…,QD) flattened C-ordered back-projected weights <span class="math notranslate nohighlight">\(f_{\bbq} \in \bR\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.xrt_grad">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">xrt_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/ray_grad.html#xrt_grad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.xrt_grad" title="Link to this definition">¶</a></dt>
+<dd><p>Gradients of 2D/3D projections with respect to the ray geometry.</p>
+<p>For each ray <span class="math notranslate nohighlight">\(l\)</span>, the gradients of its projection <span class="math notranslate nohighlight">\(P_{l}\)</span> (see
+<a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a>) with respect to its anchor <span class="math notranslate nohighlight">\(\bbt_{l}\)</span> and its direction
+<span class="math notranslate nohighlight">\(\bbn_{l}\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[\nabla_{\bbt} P_{l} = \int_{\bR} \nabla f(\bbt_{l} + \alpha \hat{\bbn}_{l}) \, d\alpha,
+\qquad
+\nabla_{\bbn} P_{l} = \frac{\bbI - \hat{\bbn}_{l} \hat{\bbn}_{l}^{T}}{\|\bbn_{l}\|}
+\int_{\bR} \alpha \nabla f(\bbt_{l} + \alpha \hat{\bbn}_{l}) \, d\alpha,\]</div>
+<p>with <span class="math notranslate nohighlight">\(\hat{\bbn}_{l} = \bbn_{l} / \|\bbn_{l}\|\)</span>. All D components come from one walk along
+the ray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNfT</em><em>, </em><em>ArrayNfT</em><em>]</em>) – (L,) ray anchors <span class="math notranslate nohighlight">\(\bbt\)</span> and directions <span class="math notranslate nohighlight">\(\bbn\)</span>. (See
+<a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a>.)</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume properties <span class="math notranslate nohighlight">\((\bbx_{0}, \bbDelta, \bbQ)\)</span>.</p></li>
+<li><p><strong>order</strong> (<em>0</em><em> | </em><em>1</em><em> | </em><em>2</em>) – Interpolation order.</p></li>
+<li><p><strong>data</strong> (<em>FloatT</em>) – (Q1,…,QD) flattened C-ordered volume weights <span class="math notranslate nohighlight">\(f_{\bbq} \in \bR\)</span>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>grad_t, grad_n</strong> – (L,) gradients <span class="math notranslate nohighlight">\(\nabla_{\bbt} P_{l}\)</span>, <span class="math notranslate nohighlight">\(\nabla_{\bbn} P_{l}\)</span>, in the units of
+<cite>knot_spec</cite>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>ArrayNfT</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(P_{l}\)</span> depends neither on the anchor’s position along the line nor on
+<span class="math notranslate nohighlight">\(\|\bbn_{l}\|\)</span>: <span class="math notranslate nohighlight">\(\nabla_{\bbt} P_{l}\)</span> and <span class="math notranslate nohighlight">\(\nabla_{\bbn} P_{l}\)</span> are orthogonal
+to <span class="math notranslate nohighlight">\(\bbn_{l}\)</span>. Rotations pivot at the anchor.</p></li>
+<li><p>Order 0: <span class="math notranslate nohighlight">\(\nabla f\)</span> lives on the cell faces. Each face the ray crosses contributes the
+jump of <span class="math notranslate nohighlight">\(f\)</span> across it, divided by <span class="math notranslate nohighlight">\(\hat{n}_{k}\)</span> (face normal to axis <span class="math notranslate nohighlight">\(k\)</span>),
+times <span class="math notranslate nohighlight">\(\alpha\)</span> for <span class="math notranslate nohighlight">\(\nabla_{\bbn}\)</span>.</p></li>
+<li><p>A ray through a lattice edge or corner (several faces crossed at once) is a kink of
+<span class="math notranslate nohighlight">\(P_{l}\)</span>. There, the jump across face <span class="math notranslate nohighlight">\(k\)</span> is averaged over face <span class="math notranslate nohighlight">\(k\)</span> crossed
+first and crossed last: the gradient is what central finite differences converge to.</p></li>
+<li><p>Orders 1, 2: in 3D, <span class="math notranslate nohighlight">\(\nabla f\)</span> is integrated over each polynomial piece (exact). In 2D, the
+closed-form projection of each basis function is differentiated: the anchor moves its
+distance to the line; the direction moves that distance (about the anchor) and the closed
+form itself.</p></li>
+<li><p>2D, order 1, rays along a lattice axis through basis centers: kinks of <span class="math notranslate nohighlight">\(P_{l}\)</span>, where
+the gradient is again the average of both sides (along a diagonal, rounding makes it
+one-sided).</p></li>
+<li><p>2D, orders 1, 2, float32: within about 0.01 rad of a lattice axis or diagonal, the closed form
+cancels and <span class="math notranslate nohighlight">\(\nabla_{\bbn} P_{l}\)</span> loses accuracy (relative error 1e-4 at 0.01 rad, 3e-3
+at 0.002 rad); float64 is exact.</p></li>
+</ul>
+</dd></dl>
+
+</section>
+<section id="structured-rays">
+<h2>Structured Rays<a class="headerlink" href="#structured-rays" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.xrt_struct_apply">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">xrt_struct_apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/struct_xrt.html#xrt_struct_apply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.xrt_struct_apply" title="Link to this definition">¶</a></dt>
+<dd><p>Compute 2D/3D structured projections.</p>
+<p>Let <span class="math notranslate nohighlight">\(f: \bR^{D} \to \bR\)</span> such that</p>
+<div class="math notranslate nohighlight">
+\[f(\bbx)
+=
+\sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}
+f_{\bbq} \psi(\bbx - \bbx_{\bbq}),\]</div>
+<p>with</p>
+<div class="math notranslate nohighlight">
+\[f_{\bbq} \in \bR,
+\qquad
+\bbx_{\bbq} = \bbx_{0} + \bbq \odot \bbDelta,
+\qquad
+\bbx_{0} \in \bR^{D},
+\quad
+\bbDelta \in \bR_{+}^{D},\]</div>
+<p>and <span class="math notranslate nohighlight">\(\psi\)</span> a box spline with direction vectors
+<span class="math notranslate nohighlight">\(\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}\)</span>.</p>
+<p>Then <code class="docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code> computes samples of</p>
+<div class="math notranslate nohighlight">
+\[\xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) d\alpha\]</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNNfT</em><em>, </em><em>ArrayNNfT</em><em>, </em><a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a><em>]</em>) – <p>(L,) implicit ray descriptors <span class="math notranslate nohighlight">\(\bbt \in \bR^{D}\)</span> and directions <span class="math notranslate nohighlight">\(\bbn \in \bR^{D}\)</span>.</p>
+<p>Expected arguments are:</p>
+<ul>
+<li><p>ray_t_spec: ArrayNNfT
+(N_proj, D, D) homogeneous transforms <span class="math notranslate nohighlight">\(\bbH_{t} = [\bbA_{t} \in \bR^{D \times (D-1)}, \bbb_{t} \in \bR^{D}]\)</span>.</p></li>
+<li><p>ray_n_spec: ArrayNNfT
+(N_proj, D, D) homogeneous transforms <span class="math notranslate nohighlight">\(\bbH_{n} = [\bbA_{n} \in \bR^{D \times (D-1)}, \bbb_{n} \in \bR^{D}]\)</span>.</p></li>
+<li><p>ray_u_spec: UniformSpec
+D-dim uniform mesh.</p></li>
+</ul>
+<p>Let <span class="math notranslate nohighlight">\(\bbu \in \bR^{D}\)</span> be a point on the mesh specified by <cite>ray_u_spec</cite>.
+Then <cite>ray_spec</cite> encodes rays of the form</p>
+<div class="math notranslate nohighlight">
+\[\bbt(\bbu) = \bbH_{t} \bbu,
+\bbn(\bbu) = \bbH_{n} \bbu.\]</div>
+<p><cite>ray_spec</cite> encodes <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">=</span> <span class="pre">N_proj</span> <span class="pre">*</span> <span class="pre">prod(ray_u_spec.num)</span></code> projections.</p>
+</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume properties <span class="math notranslate nohighlight">\((\bbx_{0}, \bbDelta, \bbQ)\)</span>.</p></li>
+<li><p><strong>order</strong> (<em>0</em><em> | </em><em>1</em><em> | </em><em>2</em>) – <p>Data interpolation order.</p>
+<p>This parameter sets which <span class="math notranslate nohighlight">\(\psi\)</span> is used to interpolate data values:</p>
+<ul>
+<li><p>order = 0 (2D, 3D):</p>
+<div class="math notranslate nohighlight">
+\[\bbE = \diag(\bbDelta)\]</div>
+</li>
+<li><p>order = 1 (2D):</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\bbE
+=
+\begin{bmatrix}
+   \Delta_{1} &amp; 0 &amp; \Delta_{1} \\
+   0 &amp; \Delta_{2} &amp; \Delta_{2}
+\end{bmatrix}\end{split}\]</div>
+</li>
+<li><p>order = 2 (2D):</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\bbE
+=
+\begin{bmatrix}
+   \Delta_{1} &amp; 0 &amp; \Delta_{1} &amp; \Delta_{1} \\
+   0 &amp; \Delta_{2} &amp; \Delta_{2} &amp; -\Delta_{2}
+\end{bmatrix}\end{split}\]</div>
+</li>
+<li><p>order = 1, 2 (3D): tensor-product B-splines (trilinear, triquadratic)</p>
+<div class="math notranslate nohighlight">
+\[\psi(\bbx)
+=
+\beta^{k}(x_{1} / \Delta_{1})
+\beta^{k}(x_{2} / \Delta_{2})
+\beta^{k}(x_{3} / \Delta_{3}),
+\quad
+\beta^{k} = \mathbb{1}_{[-1/2, 1/2]}^{\ast (k+1)},
+\quad
+k = \text{order}\]</div>
+</li>
+</ul>
+<p>The support of <span class="math notranslate nohighlight">\(\psi\)</span> and its projections can be viewed using <a class="reference internal" href="#xrt_toolkit.plot_2d_basis" title="xrt_toolkit.plot_2d_basis"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_2d_basis()</span></code></a>.</p>
+</p></li>
+<li><p><strong>data</strong> (<em>FloatT</em>) – (Q1,…,QD) flattened C-ordered volume weights <span class="math notranslate nohighlight">\(f_{\bbq} \in \bR\)</span>.</p></li>
+<li><p><strong>buffer</strong> (<em>FloatT</em>) – (L,) buffer in which to accumulate projections.
+The <code class="docutils literal notranslate"><span class="pre">(N_proj,</span> <span class="pre">*ray_u_spec.num)</span></code> mesh-points are serialized in C-order.</p></li>
+<li><p><strong>weight</strong> (<a class="reference internal" href="#xrt_toolkit.TOFSpec" title="xrt_toolkit.TOFSpec"><em>TOFSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.PolynomialWeightSpec" title="xrt_toolkit.PolynomialWeightSpec"><em>PolynomialWeightSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.TabulatedWeightSpec" title="xrt_toolkit.TabulatedWeightSpec"><em>TabulatedWeightSpec</em></a>) – Weight along each ray (see <a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a>), per ray in the order of the
+projections. Arc lengths are measured from the anchors of <a class="reference internal" href="#xrt_toolkit.struct_rays" title="xrt_toolkit.struct_rays"><code class="xref py py-func docutils literal notranslate"><span class="pre">struct_rays()</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>proj</strong> – (L,) projections <span class="math notranslate nohighlight">\(\xrt[f] \in \bR\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.xrt_struct_adjoint">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">xrt_struct_adjoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffer</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/struct_xrt.html#xrt_struct_adjoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.xrt_struct_adjoint" title="Link to this definition">¶</a></dt>
+<dd><p>Compute 2D/3D structured back-projections.</p>
+<p>Adjoint of <code class="docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code>: maps projection weights to volume expansion coefficients.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNNfT</em><em>, </em><em>ArrayNNfT</em><em>, </em><a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a><em>]</em>) – <p>(L,) implicit ray descriptors <span class="math notranslate nohighlight">\(\bbt \in \bR^{D}\)</span> and directions <span class="math notranslate nohighlight">\(\bbn \in \bR^{D}\)</span>.</p>
+<p>Expected arguments are:</p>
+<ul>
+<li><p>ray_t_spec: ArrayNNfT
+(N_proj, D, D) homogeneous transforms <span class="math notranslate nohighlight">\(\bbH_{t} = [\bbA_{t} \in \bR^{D \times (D-1)}, \bbb_{t} \in \bR^{D}]\)</span>.</p></li>
+<li><p>ray_n_spec: ArrayNNfT
+(N_proj, D, D) homogeneous transforms <span class="math notranslate nohighlight">\(\bbH_{n} = [\bbA_{n} \in \bR^{D \times (D-1)}, \bbb_{n} \in \bR^{D}]\)</span>.</p></li>
+<li><p>ray_u_spec: UniformSpec
+D-dim uniform mesh.</p></li>
+</ul>
+<p>Let <span class="math notranslate nohighlight">\(\bbu \in \bR^{D}\)</span> be a point on the mesh specified by <cite>ray_u_spec</cite>.
+Then <cite>ray_spec</cite> encodes rays of the form</p>
+<div class="math notranslate nohighlight">
+\[\bbt(\bbu) = \bbH_{t} \bbu,
+\bbn(\bbu) = \bbH_{n} \bbu.\]</div>
+<p><cite>ray_spec</cite> encodes <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">=</span> <span class="pre">N_proj</span> <span class="pre">*</span> <span class="pre">prod(ray_u_spec.num)</span></code> projections.</p>
+</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume properties <span class="math notranslate nohighlight">\((\bbx_{0}, \bbDelta, \bbQ)\)</span>.</p></li>
+<li><p><strong>order</strong> (<em>0</em><em> | </em><em>1</em><em> | </em><em>2</em>) – <p>Data interpolation order.</p>
+<p>This parameter sets which <span class="math notranslate nohighlight">\(\psi\)</span> is used to interpolate data values.
+The support of <span class="math notranslate nohighlight">\(\psi\)</span> and its projections can be viewed using <a class="reference internal" href="#xrt_toolkit.plot_2d_basis" title="xrt_toolkit.plot_2d_basis"><code class="xref py py-func docutils literal notranslate"><span class="pre">plot_2d_basis()</span></code></a>.</p>
+</p></li>
+<li><p><strong>data</strong> (<em>FloatT</em>) – (L,) projections <span class="math notranslate nohighlight">\(g_{l} \in \bR\)</span>.
+The <code class="docutils literal notranslate"><span class="pre">(N_proj,</span> <span class="pre">*ray_u_spec.num)</span></code> mesh-points are serialized in C-order.</p></li>
+<li><p><strong>buffer</strong> (<em>FloatT</em>) – (Q1,…,QD) flattened buffer in which to accumulate back-projected weights <span class="math notranslate nohighlight">\(f_{\bbq} \in \bR\)</span>.</p></li>
+<li><p><strong>weight</strong> (<a class="reference internal" href="#xrt_toolkit.TOFSpec" title="xrt_toolkit.TOFSpec"><em>TOFSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.PolynomialWeightSpec" title="xrt_toolkit.PolynomialWeightSpec"><em>PolynomialWeightSpec</em></a><em> | </em><a class="reference internal" href="#xrt_toolkit.TabulatedWeightSpec" title="xrt_toolkit.TabulatedWeightSpec"><em>TabulatedWeightSpec</em></a>) – Weight along each ray. (See <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a>.)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>b_proj</strong> – (Q1,…,QD) flattened C-ordered back-projected weights <span class="math notranslate nohighlight">\(f_{\bbq} \in \bR\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.struct_rays">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">struct_rays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/struct_xrt.html#struct_rays"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.struct_rays" title="Link to this definition">¶</a></dt>
+<dd><p>Individual rays of a structured geometry.</p>
+<p>Returns one ray (anchor <span class="math notranslate nohighlight">\(\bbt\)</span>, direction <span class="math notranslate nohighlight">\(\bbn\)</span>) per (projection, detector cell)
+of a geometry from <a class="reference internal" href="#xrt_toolkit.parallel_beam" title="xrt_toolkit.parallel_beam"><code class="xref py py-func docutils literal notranslate"><span class="pre">parallel_beam()</span></code></a> or <a class="reference internal" href="#xrt_toolkit.cone_beam" title="xrt_toolkit.cone_beam"><code class="xref py py-func docutils literal notranslate"><span class="pre">cone_beam()</span></code></a>,
+in the order of <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a>’s output. With these rays,
+<a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a> / <a class="reference internal" href="#xrt_toolkit.xrt_adjoint" title="xrt_toolkit.xrt_adjoint"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_adjoint()</span></code></a> give the same results
+as <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a> / <a class="reference internal" href="#xrt_toolkit.xrt_struct_adjoint" title="xrt_toolkit.xrt_struct_adjoint"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_adjoint()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ray_spec</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNNfT</em><em>, </em><em>ArrayNNfT</em><em>, </em><a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a><em>]</em>) – Structured geometry. (See <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a>.)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ray_spec</strong> – (L,) ray anchors <span class="math notranslate nohighlight">\(\bbt\)</span> and directions <span class="math notranslate nohighlight">\(\bbn\)</span>, <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">=</span> <span class="pre">N_proj</span> <span class="pre">*</span> <span class="pre">prod(ray_u_spec.num)</span></code>,
+projection-major.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)">tuple</a>[ArrayNfT, ArrayNfT]</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The rays are computed lazily: used directly in a projector, they are evaluated inside its kernel
+and never stored.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.parallel_beam">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">parallel_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">angles</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detector_spec</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/geometry.html#parallel_beam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.parallel_beam" title="Link to this definition">¶</a></dt>
+<dd><p>Create parallel/cylinder-beam structured ray specification.</p>
+<p>This is a helper function to create pre-defined projection geometries for <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a> or <a class="reference internal" href="#xrt_toolkit.xrt_struct_adjoint" title="xrt_toolkit.xrt_struct_adjoint"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_adjoint()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>angles</strong> (<em>FloatT</em>) – (N_proj,) view angles [rad]: view <span class="math notranslate nohighlight">\(\theta\)</span> has rays along
+<span class="math notranslate nohighlight">\((\cos\theta, \sin\theta)\)</span> in the XY plane, and its detector through the origin.</p></li>
+<li><p><strong>detector_spec</strong> (<a class="reference internal" href="#xrt_toolkit.util.DetectorSpec" title="xrt_toolkit.util.DetectorSpec"><em>DetectorSpec</em></a>) – 1D (width) or 2D (width, height) detector.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p><strong>ray_spec</strong> – Implicit ray descriptor encoding <cite>N_proj</cite> parallel/cylinder-beam projections.</p>
+<p><cite>ray_spec</cite> encodes <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">=</span> <span class="pre">N_proj</span> <span class="pre">*</span> <span class="pre">prod(detector_spec.num_cell)</span></code> projections.</p>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>RaySpecT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.cone_beam">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">cone_beam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sod</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sdd</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angles</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detector_spec</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/drjit/geometry.html#cone_beam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.cone_beam" title="Link to this definition">¶</a></dt>
+<dd><p>Create fan/cone-beam structured ray specification.</p>
+<p>This is a helper function to create pre-defined projection geometries for <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a> or <a class="reference internal" href="#xrt_toolkit.xrt_struct_adjoint" title="xrt_toolkit.xrt_struct_adjoint"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_adjoint()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sod</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – Source-Object-Distance (XY plane).</p></li>
+<li><p><strong>sdd</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – Source-Detector-Distance (XY plane).</p></li>
+<li><p><strong>angles</strong> (<em>FloatT</em>) – (N_proj,) view angles [rad]: at view <span class="math notranslate nohighlight">\(\theta\)</span>, the source sits at
+<span class="math notranslate nohighlight">\(-\text{sod} \, (\cos\theta, \sin\theta)\)</span> in the XY plane, and the detector faces it
+at distance <cite>sdd</cite>.</p></li>
+<li><p><strong>detector_spec</strong> (<a class="reference internal" href="#xrt_toolkit.util.DetectorSpec" title="xrt_toolkit.util.DetectorSpec"><em>DetectorSpec</em></a>) – 1D (width) or 2D (width, height) detector.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p><strong>ray_spec</strong> – Implicit ray descriptor encoding <cite>N_proj</cite> fan/cone-beam projections.</p>
+<p><cite>ray_spec</cite> encodes <code class="docutils literal notranslate"><span class="pre">L</span> <span class="pre">=</span> <span class="pre">N_proj</span> <span class="pre">*</span> <span class="pre">prod(detector_spec.num_cell)</span></code> projections.</p>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>RaySpecT</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="weights-along-rays">
+<h2>Weights Along Rays<a class="headerlink" href="#weights-along-rays" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="xrt_toolkit.TOFSpec">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">TOFSpec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/tof.html#TOFSpec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.TOFSpec" title="Link to this definition">¶</a></dt>
+<dd><p>Time-of-flight (TOF) weight along each ray, a Gaussian.</p>
+<p>As <cite>weight</cite> of <a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a>, it gives</p>
+<div class="math notranslate nohighlight">
+\[\int_{\bR} f(\bbt + \alpha \hat{\bbn}) \, g_{\sigma}(\alpha - \mu) \, d\alpha,
+\qquad
+g_{\sigma}(\alpha) = \frac{1}{\sigma \sqrt{2\pi}} \exp\left(-\frac{\alpha^{2}}{2\sigma^{2}}\right),\]</div>
+<p>where <span class="math notranslate nohighlight">\(\alpha\)</span> is the signed arc length from the ray anchor <span class="math notranslate nohighlight">\(\bbt\)</span> along the unit
+direction <span class="math notranslate nohighlight">\(\hat{\bbn}\)</span>. In positron emission tomography, <span class="math notranslate nohighlight">\(\mu\)</span> is the most likely
+annihilation position along the line of response and <span class="math notranslate nohighlight">\(\sigma\)</span> the timing resolution of
+the scanner, both in the length unit of <cite>knot_spec</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>center</strong> (<em>FloatT</em><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – (L,) TOF centers <span class="math notranslate nohighlight">\(\mu\)</span>, one per ray, or a scalar shared by all rays.</p></li>
+<li><p><strong>sigma</strong> (<em>FloatT</em><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – (L,) TOF standard deviations <span class="math notranslate nohighlight">\(\sigma &gt; 0\)</span>, one per ray, or a scalar shared by all
+rays.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Order 0 is exact: the window is integrated over each voxel chord.</p></li>
+<li><p>3D orders 1, 2 integrate the window with the basis functions by Gauss quadrature: float32
+accurate for <span class="math notranslate nohighlight">\(\sigma\)</span> of one voxel or more.</p></li>
+<li><p>2D orders 1, 2 weight each basis function by the window at its center. This is an
+approximation, with relative error decreasing like 1/<span class="math notranslate nohighlight">\(\sigma\)</span> (order 1: 1.4% at
+<span class="math notranslate nohighlight">\(\sigma\)</span> = 3 pixels, 0.13% at 30).</p></li>
+<li><p>Binned TOF data is modelled by repeating each ray once per TOF bin, with that bin’s
+<cite>center</cite>.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="xrt_toolkit.PolynomialWeightSpec">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">PolynomialWeightSpec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coeff</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">origin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/weight.html#PolynomialWeightSpec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.PolynomialWeightSpec" title="Link to this definition">¶</a></dt>
+<dd><p>Polynomial weight along each ray,</p>
+<div class="math notranslate nohighlight">
+\[w(\alpha) = \sum_{k=0}^{K-1} c_{k} (\alpha - \alpha_{0})^{k},\]</div>
+<p>where <span class="math notranslate nohighlight">\(\alpha\)</span> is the signed arc length from the ray anchor along the unit direction.
+Pass it as <cite>weight</cite> of <a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a> and <a class="reference internal" href="#xrt_toolkit.xrt_adjoint" title="xrt_toolkit.xrt_adjoint"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_adjoint()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>coeff</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)"><em>list</em></a><em>[</em><em>FloatT</em><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a><em>]</em>) – Coefficients <span class="math notranslate nohighlight">\(c_{0}, \ldots, c_{K-1}\)</span>, in increasing degree. Each is a scalar shared
+by all rays, or (L,) one per ray.</p></li>
+<li><p><strong>origin</strong> (<em>FloatT</em><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – Expansion point <span class="math notranslate nohighlight">\(\alpha_{0}\)</span>, scalar or (L,).</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Order 0 is exact.</p></li>
+<li><p>3D orders 1, 2 are exact for degrees up to 8 (order 1) and 5 (order 2).</p></li>
+<li><p>2D orders 1, 2 weight each basis function by <span class="math notranslate nohighlight">\(w\)</span> at its center (an approximation).</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p>Multiple-scattering moments of a ray of length <span class="math notranslate nohighlight">\(H\)</span>, anchored at its entry point
+(muon scattering tomography):</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">m0</span> <span class="o">=</span> <span class="n">PolynomialWeightSpec</span><span class="p">([</span><span class="mf">1.0</span><span class="p">])</span>  <span class="c1"># int f</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m1</span> <span class="o">=</span> <span class="n">PolynomialWeightSpec</span><span class="p">([</span><span class="n">H</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">])</span>  <span class="c1"># int f (H - alpha)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">m2</span> <span class="o">=</span> <span class="n">PolynomialWeightSpec</span><span class="p">([</span><span class="n">H</span> <span class="o">*</span> <span class="n">H</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">H</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">])</span>  <span class="c1"># int f (H - alpha)^2</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="xrt_toolkit.TabulatedWeightSpec">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">TabulatedWeightSpec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/weight.html#TabulatedWeightSpec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.TabulatedWeightSpec" title="Link to this definition">¶</a></dt>
+<dd><p>Weight along each ray, tabulated on a uniform grid of arc lengths and interpolated linearly.</p>
+<p>Sample <span class="math notranslate nohighlight">\(j\)</span> of ray <span class="math notranslate nohighlight">\(l\)</span> sits at arc length <span class="math notranslate nohighlight">\(\text{start}_{l} + j \,
+\text{step}_{l}\)</span> from the ray anchor. Beyond the ends of the table, the weight is constant.
+Pass it as <cite>weight</cite> of <a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a> and <a class="reference internal" href="#xrt_toolkit.xrt_adjoint" title="xrt_toolkit.xrt_adjoint"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_adjoint()</span></code></a>.</p>
+<p>Use it when the weight has no closed form, e.g. the attenuation factor
+<span class="math notranslate nohighlight">\(\exp(-\int_{\alpha}^{\infty} \mu)\)</span> of an attenuated transform with diverging rays.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>values</strong> (<em>FloatT</em>) – (L * num,) weights, ray-major: ray <span class="math notranslate nohighlight">\(l\)</span> holds <code class="docutils literal notranslate"><span class="pre">values[l</span> <span class="pre">*</span> <span class="pre">num</span> <span class="pre">:</span> <span class="pre">(l</span> <span class="pre">+</span> <span class="pre">1)</span> <span class="pre">*</span> <span class="pre">num]</span></code>.</p></li>
+<li><p><strong>num</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>) – Samples per ray, at least 2.</p></li>
+<li><p><strong>start</strong> (<em>FloatT</em><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – Arc length of sample 0, scalar or (L,).</p></li>
+<li><p><strong>step</strong> (<em>FloatT</em><em> | </em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – Sample spacing &gt; 0, scalar or (L,).</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Order 0 is exact: the interpolant is integrated over each voxel chord.</p></li>
+<li><p>3D orders 1, 2 integrate it with the basis functions by Gauss quadrature, which does not
+see the kinks of the interpolant: accurate when the table is smooth over a knot step
+(relative error 2e-4 for random values every 4 knot steps, 2e-2 every quarter step).</p></li>
+<li><p>2D orders 1, 2 weight each basis function by the interpolant at its center (an
+approximation).</p></li>
+</ul>
+</dd></dl>
+
+</section>
+<section id="reconstruction">
+<h2>Reconstruction<a class="headerlink" href="#reconstruction" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.cg">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">cg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">At</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_unknowns</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/optim.html#cg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.cg" title="Link to this definition">¶</a></dt>
+<dd><p>Least squares <span class="math notranslate nohighlight">\(\min_{f} \|A f - y\|_{2}^{2}\)</span>, by conjugate gradient on the normal
+equations <span class="math notranslate nohighlight">\(A^{T} A f = A^{T} y\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>callable</em>) – Forward and adjoint operators.</p></li>
+<li><p><strong>At</strong> (<em>callable</em>) – Forward and adjoint operators.</p></li>
+<li><p><strong>y</strong> (<em>FloatT</em>) – Measurements.</p></li>
+<li><p><strong>n_unknowns</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>) – Size of <span class="math notranslate nohighlight">\(f\)</span>.</p></li>
+<li><p><strong>n_iter</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>) – Number of iterations. With noisy or incomplete data, stopping early regularizes.</p></li>
+<li><p><strong>x0</strong> (<em>FloatT</em>) – Initial <span class="math notranslate nohighlight">\(f\)</span> (default: 0).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>f</strong> – (n_unknowns,) solution.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.gd">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">gd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">At</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_unknowns</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_iter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/optim.html#gd"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.gd" title="Link to this definition">¶</a></dt>
+<dd><p>Least squares <span class="math notranslate nohighlight">\(\min_{f} \|A f - y\|_{2}^{2}\)</span>, by gradient descent (Landweber
+iteration): <span class="math notranslate nohighlight">\(f \leftarrow f - \tau A^{T} (A f - y)\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>callable</em>) – Forward and adjoint operators.</p></li>
+<li><p><strong>At</strong> (<em>callable</em>) – Forward and adjoint operators.</p></li>
+<li><p><strong>y</strong> (<em>FloatT</em>) – Measurements.</p></li>
+<li><p><strong>n_unknowns</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>) – Size of <span class="math notranslate nohighlight">\(f\)</span>.</p></li>
+<li><p><strong>n_iter</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a>) – Number of iterations.</p></li>
+<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a>) – Step <span class="math notranslate nohighlight">\(\tau\)</span>. Default: <span class="math notranslate nohighlight">\(1.9 / \|A^{T} A\|\)</span>, with the norm estimated by 15
+power iterations (convergence needs <span class="math notranslate nohighlight">\(\tau &lt; 2 / \|A^{T} A\|\)</span>).</p></li>
+<li><p><strong>x0</strong> (<em>FloatT</em>) – Initial <span class="math notranslate nohighlight">\(f\)</span> (default: 0).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>f</strong> – (n_unknowns,) solution.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.fbp">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">fbp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hann'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/optim.html#fbp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.fbp" title="Link to this definition">¶</a></dt>
+<dd><p>Filtered backprojection of a parallel-beam scan.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<em>RaySpecT</em>) – Scan from <a class="reference internal" href="#xrt_toolkit.parallel_beam" title="xrt_toolkit.parallel_beam"><code class="xref py py-func docutils literal notranslate"><span class="pre">parallel_beam()</span></code></a>, with views covering <span class="math notranslate nohighlight">\([0, \pi)\)</span>
+uniformly. 2D, or 3D (each detector row reconstructs one slice).</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Reconstruction lattice, centered on the rotation axis.</p></li>
+<li><p><strong>y</strong> (<em>FloatT</em>) – (L,) projections, in the order of <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a>.</p></li>
+<li><p><strong>window</strong> (<em>&quot;hann&quot;</em><em> | </em><em>&quot;hamming&quot;</em><em> | </em><em>&quot;cosine&quot;</em><em> | </em><em>&quot;shepp-logan&quot;</em><em> | </em><em>&quot;ramp&quot;</em>) – Apodization of the ramp filter (“ramp”: none).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>f</strong> – (Q1,…,QD) flattened C-ordered voxel values; 0 outside the field of view (voxels that
+some view does not see).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>With a detector finer than the lattice, the filter stops at the lattice resolution, as if
+the detector cells were binned to the voxel size: a finer detector never makes the
+reconstruction noisier, but it does not make it sharper either.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.fdk">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">fdk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'hann'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/optim.html#fdk"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.fdk" title="Link to this definition">¶</a></dt>
+<dd><p>Filtered backprojection of a cone-beam scan (Feldkamp-Davis-Kress), or of a fan-beam scan
+in 2D.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<em>RaySpecT</em>) – Scan from <a class="reference internal" href="#xrt_toolkit.cone_beam" title="xrt_toolkit.cone_beam"><code class="xref py py-func docutils literal notranslate"><span class="pre">cone_beam()</span></code></a>, with views covering <span class="math notranslate nohighlight">\([0, 2\pi)\)</span>
+uniformly.</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Reconstruction lattice, centered on the rotation axis.</p></li>
+<li><p><strong>y</strong> (<em>FloatT</em>) – (L,) projections, in the order of <a class="reference internal" href="#xrt_toolkit.xrt_struct_apply" title="xrt_toolkit.xrt_struct_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a>.</p></li>
+<li><p><strong>window</strong> (<em>&quot;hann&quot;</em><em> | </em><em>&quot;hamming&quot;</em><em> | </em><em>&quot;cosine&quot;</em><em> | </em><em>&quot;shepp-logan&quot;</em><em> | </em><em>&quot;ramp&quot;</em>) – Apodization of the ramp filter (“ramp”: none).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>f</strong> – (Q1,…,QD) flattened C-ordered voxel values; 0 outside the field of view.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>FloatT</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Exact in the plane of the source orbit; away from it, FDK’s usual errors, which grow with
+the cone angle. As in <a class="reference internal" href="#xrt_toolkit.fbp" title="xrt_toolkit.fbp"><code class="xref py py-func docutils literal notranslate"><span class="pre">fbp()</span></code></a>, the filter stops at the lattice resolution.</p>
+</dd></dl>
+
+</section>
+<section id="pytorch">
+<h2>PyTorch<a class="headerlink" href="#pytorch" title="Link to this heading">¶</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Requires <a class="reference external" href="https://pytorch.org/docs/stable">PyTorch</a>, not installed by default.</p>
+</div>
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.torch.xrt_torch">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.torch.</span></span><span class="sig-name descname"><span class="pre">xrt_torch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/torch.html#xrt_torch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.torch.xrt_torch" title="Link to this definition">¶</a></dt>
+<dd><p>Projections of a volume along rays, differentiable in all three.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.14)"><em>torch.Tensor</em></a>) – (Q1*…*QD,) flattened C-ordered volume coefficients.</p></li>
+<li><p><strong>t</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.14)"><em>torch.Tensor</em></a>) – (D, L) ray anchors and directions, one column per ray, on the same device (CUDA or CPU)
+and in the same precision (float32 or float64) as <cite>data</cite>.</p></li>
+<li><p><strong>n</strong> (<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.14)"><em>torch.Tensor</em></a>) – (D, L) ray anchors and directions, one column per ray, on the same device (CUDA or CPU)
+and in the same precision (float32 or float64) as <cite>data</cite>.</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume lattice. (See <a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a>.)</p></li>
+<li><p><strong>order</strong> (<em>0</em><em> | </em><em>1</em><em> | </em><em>2</em>) – Basis order.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>proj</strong> – (L,) projections.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.14)">torch.Tensor</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="xrt_toolkit.torch.XRTProjector">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xrt_toolkit.torch.</span></span><span class="sig-name descname"><span class="pre">XRTProjector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/torch.html#XRTProjector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.torch.XRTProjector" title="Link to this definition">¶</a></dt>
+<dd><p><a class="reference internal" href="#xrt_toolkit.torch.xrt_torch" title="xrt_toolkit.torch.xrt_torch"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_torch()</span></code></a> as a <code class="docutils literal notranslate"><span class="pre">torch.nn.Module</span></code>, for a fixed volume lattice and basis order.</p>
+</dd></dl>
+
+</section>
+<section id="interoperability">
+<h2>Interoperability<a class="headerlink" href="#interoperability" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.from_astra">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">from_astra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">proj_geom</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vol_geom</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Array</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/interop.html#from_astra"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.from_astra" title="Link to this definition">¶</a></dt>
+<dd><p>Convert an ASTRA geometry pair into XTK rays and volume lattice.</p>
+<p>The returned <code class="docutils literal notranslate"><span class="pre">(ray_spec,</span> <span class="pre">knot_spec)</span></code> can be passed directly to
+<a class="reference internal" href="#xrt_toolkit.xrt_apply" title="xrt_toolkit.xrt_apply"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a> and <a class="reference internal" href="#xrt_toolkit.xrt_adjoint" title="xrt_toolkit.xrt_adjoint"><code class="xref py py-func docutils literal notranslate"><span class="pre">xrt_adjoint()</span></code></a>. The rays are ordered
+as the flattened ASTRA sinogram: (angles, det) in 2D, (det_v, angles, det_u) in 3D. Convert
+volume arrays with <a class="reference internal" href="#xrt_toolkit.interop.vol_astra_to_xtk" title="xrt_toolkit.interop.vol_astra_to_xtk"><code class="xref py py-func docutils literal notranslate"><span class="pre">vol_astra_to_xtk()</span></code></a> and
+<a class="reference internal" href="#xrt_toolkit.interop.vol_xtk_to_astra" title="xrt_toolkit.interop.vol_xtk_to_astra"><code class="xref py py-func docutils literal notranslate"><span class="pre">vol_xtk_to_astra()</span></code></a>.</p>
+<p>Supported geometries: <code class="docutils literal notranslate"><span class="pre">parallel</span></code>, <code class="docutils literal notranslate"><span class="pre">fanflat</span></code>, <code class="docutils literal notranslate"><span class="pre">parallel3d</span></code>, <code class="docutils literal notranslate"><span class="pre">cone</span></code> and their <code class="docutils literal notranslate"><span class="pre">*_vec</span></code>
+forms. Only the non-<code class="docutils literal notranslate"><span class="pre">*_vec</span></code> forms need <code class="docutils literal notranslate"><span class="pre">astra-toolbox</span></code> to be installed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>proj_geom</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><em>dict</em></a>) – ASTRA projection geometry, e.g. from <code class="docutils literal notranslate"><span class="pre">astra.create_proj_geom()</span></code>.</p></li>
+<li><p><strong>vol_geom</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><em>dict</em></a>) – ASTRA volume geometry, e.g. from <code class="docutils literal notranslate"><span class="pre">astra.create_vol_geom()</span></code>. Voxels must be isotropic.</p></li>
+<li><p><strong>Array</strong> (<em>ArrayNfT type</em>) – Ray coordinate type. (Default: <code class="docutils literal notranslate"><span class="pre">drjit.cuda.Array2f</span></code> or <code class="docutils literal notranslate"><span class="pre">drjit.cuda.Array3f</span></code>.)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>ray_spec</strong> (<em>tuple[ArrayNfT, ArrayNfT]</em>) – (L,) ray anchors <span class="math notranslate nohighlight">\(\bbt\)</span> and directions <span class="math notranslate nohighlight">\(\bbn\)</span>.</p></li>
+<li><p><strong>knot_spec</strong> (<em>UniformSpec</em>) – Volume lattice.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Lengths are in units of the voxel size <span class="math notranslate nohighlight">\(s\)</span>: XTK’s projections are ASTRA’s divided by
+<span class="math notranslate nohighlight">\(s\)</span>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.interop.vol_astra_to_xtk">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.interop.</span></span><span class="sig-name descname"><span class="pre">vol_astra_to_xtk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">vol</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/interop.html#vol_astra_to_xtk"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.interop.vol_astra_to_xtk" title="Link to this definition">¶</a></dt>
+<dd><p>Reorder an ASTRA volume array into XTK’s flattened C-ordered layout.</p>
+<p>ASTRA stores 2D volumes as (rows, cols) = (-y, x), the row index increasing towards -y, and 3D
+volumes as (slices, rows, cols) = (z, y, x). XTK stores a flat C-ordered array indexed by
+(x, y[, z]), all axes increasing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>vol</strong> (<em>np.ndarray</em>) – (ny, nx) or (nz, ny, nx) ASTRA volume.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>flat</strong> – (nx * ny [* nz],) XTK coefficients.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.interop.vol_xtk_to_astra">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.interop.</span></span><span class="sig-name descname"><span class="pre">vol_xtk_to_astra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flat</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/interop.html#vol_xtk_to_astra"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.interop.vol_xtk_to_astra" title="Link to this definition">¶</a></dt>
+<dd><p>Inverse of <a class="reference internal" href="#xrt_toolkit.interop.vol_astra_to_xtk" title="xrt_toolkit.interop.vol_astra_to_xtk"><code class="xref py py-func docutils literal notranslate"><span class="pre">vol_astra_to_xtk()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>flat</strong> (<em>np.ndarray</em>) – (nx * ny [* nz],) XTK coefficients.</p></li>
+<li><p><strong>num</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em>]</em>) – (nx, ny[, nz]) lattice size, i.e. <code class="docutils literal notranslate"><span class="pre">knot_spec.num</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>vol</strong> – (ny, nx) or (nz, ny, nx) ASTRA volume.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.asarray">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">asarray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/compat.html#asarray"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.asarray" title="Link to this definition">¶</a></dt>
+<dd><p>Convert Array-API-compatible array to a DrJit array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>NDArray</em>) – <p>float[16,32,64] array of shape (N,), (N, D) or (N, D, D).</p>
+<p>In DrJit terminology, the leading dimension <cite>N</cite> is assumed to be dynamic-length.</p>
+<p><cite>D</cite> must be in (2, 3, 4).</p>
+</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p><strong>y</strong> – DrJit array of type:</p>
+<ul class="simple">
+<li><p>(N,) -&gt; Float{precision}</p></li>
+<li><p>(N, D) -&gt; ArrayDf{precision}</p></li>
+<li><p>(N, D, D) -&gt; ArrayDDf{precision}</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>AnyArray</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The conversion is typically zero-copy via DLpack when possible.</p>
+</dd></dl>
+
+</section>
+<section id="helpers">
+<h2>Helpers<a class="headerlink" href="#helpers" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="xrt_toolkit.UniformSpec">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">UniformSpec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/mesh.html#UniformSpec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.UniformSpec" title="Link to this definition">¶</a></dt>
+<dd><p>Multi-dimensional uniform mesh specifier.</p>
+<p>Defines points <span class="math notranslate nohighlight">\(\bbx_{m} \in \bR^{D}\)</span> where each point lies on the
+regular lattice</p>
+<div class="math notranslate nohighlight">
+\[\bbx_{\bbm} = \bbx_{0} + \Delta_{\bbx} \odot \bbm,
+\qquad
+[\bbm]_{d} \in \{0,\ldots,M_{d}-1\}\]</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="xrt_toolkit.UniformSpec.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/mesh.html#UniformSpec.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.UniformSpec.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Scalars are broadcast to all dimensions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a><em>]</em>) – <span class="math notranslate nohighlight">\(\bbx_{0} \in \bR^{D}\)</span></p></li>
+<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a><em>]</em>) – <span class="math notranslate nohighlight">\(\Delta_{\bbx} \in \bR_{+}^{D}\)</span></p></li>
+<li><p><strong>num</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em>]</em>) – (M1,…,MD) lattice size</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xrt_toolkit.UniformSpec.centered">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">centered</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/mesh.html#UniformSpec.centered"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.UniformSpec.centered" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize a UniformSpec centered at the origin.</p>
+<p>Scalars are broadcast to all dimensions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>step</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a><em>]</em>) – <span class="math notranslate nohighlight">\(\Delta_{\bbx} \in \bR_{+}^{D}\)</span></p></li>
+<li><p><strong>num</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em>]</em>) – (M1,…,MD) lattice size</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>u_spec</strong></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec">UniformSpec</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="xrt_toolkit.util.DetectorSpec">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xrt_toolkit.util.</span></span><span class="sig-name descname"><span class="pre">DetectorSpec</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_cell</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/mesh.html#DetectorSpec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.util.DetectorSpec" title="Link to this definition">¶</a></dt>
+<dd><p>Physical dimensions of a 1D/2D pixelized detector.</p>
+<p><cite>DetectorSpec</cite> does not encode the detector’s position in space.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="xrt_toolkit.util.DetectorSpec.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_cell</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/util/mesh.html#DetectorSpec.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.util.DetectorSpec.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Scalars are broadcast to all dimensions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>size</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#float" title="(in Python v3.15)"><em>float</em></a><em>]</em>) – <p>Detector span (unitless) <span class="math notranslate nohighlight">\(\in \bR_{+}^{D}\)</span>.</p>
+<p>A 1D size denotes detector width.
+A 2D size denotes detector (width, height).</p>
+</p></li>
+<li><p><strong>num_cell</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><em>int</em></a><em>]</em>) – (M1,…,MD) cell count per dimension</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="diagnostics">
+<h2>Diagnostics<a class="headerlink" href="#diagnostics" title="Link to this heading">¶</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Requires the <code class="docutils literal notranslate"><span class="pre">viz</span></code> extra: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">xrt_toolkit[viz]</span></code>.</p>
+</div>
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.plot_rays">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">plot_rays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ray_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_grid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/diagnostics.html#plot_rays"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.plot_rays" title="Link to this definition">¶</a></dt>
+<dd><p>Plot ray trajectories inside a volume.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ray_spec</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNfT</em><em>, </em><em>ArrayNfT</em><em>] </em><em>| </em><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#tuple" title="(in Python v3.15)"><em>tuple</em></a><em>[</em><em>ArrayNNfT</em><em>, </em><em>ArrayNNfT</em><em>, </em><a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a><em>]</em>) – <p>(L,) ray anchors <span class="math notranslate nohighlight">\(\bbt \in \bR^{D}\)</span> and directions <span class="math notranslate nohighlight">\(\bbn \in \bR^{D}\)</span>.</p>
+<p>There are two methods to specify ray parameters <span class="math notranslate nohighlight">\((\bbt, \bbn)\)</span>:</p>
+<ul>
+<li><p>Explicit, as in <code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code>,</p></li>
+<li><p>Implicit, as in <code class="docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code>.</p></li>
+</ul>
+<p>Refer to their docstrings for details.</p>
+</p></li>
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume properties <span class="math notranslate nohighlight">\((\bbx_{0}, \bbDelta, \bbQ)\)</span>.</p></li>
+<li><p><strong>show_grid</strong> (<a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><em>bool</em></a>) – If true, overlay the neighborhood grid.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>fig</strong> – Diagnostic plot.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.11.2)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Figure</span></code></a></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Rays which do not intersect the volume are <strong>not</strong> shown.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xrt_toolkit.plot_2d_basis">
+<span class="sig-prename descclassname"><span class="pre">xrt_toolkit.</span></span><span class="sig-name descname"><span class="pre">plot_2d_basis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">knot_spec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ray_n</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/xrt_toolkit/diagnostics.html#plot_2d_basis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xrt_toolkit.plot_2d_basis" title="Link to this definition">¶</a></dt>
+<dd><p>Visualize basis function <span class="math notranslate nohighlight">\(\psi: \bR^{2} \to \bR\)</span>.</p>
+<p>Shows side-by-side:</p>
+<ul class="simple">
+<li><p>a portion of the neighborhood grid with the support of <span class="math notranslate nohighlight">\(\psi\)</span> overlayed.</p></li>
+<li><p>1d projections of <span class="math notranslate nohighlight">\(\psi\)</span> at projection directions <cite>ray_n</cite>.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>knot_spec</strong> (<a class="reference internal" href="#xrt_toolkit.UniformSpec" title="xrt_toolkit.UniformSpec"><em>UniformSpec</em></a>) – Volume properties <span class="math notranslate nohighlight">\((\bbx_{0}, \bbDelta, \bbQ)\)</span>.</p></li>
+<li><p><strong>order</strong> (<em>0</em><em> | </em><em>1</em><em> | </em><em>2</em>) – <p>Data interpolation order.</p>
+<p>This parameter sets which <span class="math notranslate nohighlight">\(\psi\)</span> is used to interpolate data values.</p>
+</p></li>
+<li><p><strong>ray_n</strong> (<em>ArrayNfT</em>) – (L,) projection directions <span class="math notranslate nohighlight">\(\bbn \in \bR^{2}\)</span>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>fig</strong> – Diagnostic plot.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://matplotlib.org/stable/api/_as_gen/matplotlib.figure.Figure.html#matplotlib.figure.Figure" title="(in Matplotlib v3.11.2)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Figure</span></code></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="index.html">Table of Contents</a></h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#x-ray-transforms">X-Ray Transforms</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.xrt_apply"><code class="docutils literal notranslate"><span class="pre">xrt_apply()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.xrt_adjoint"><code class="docutils literal notranslate"><span class="pre">xrt_adjoint()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.xrt_grad"><code class="docutils literal notranslate"><span class="pre">xrt_grad()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#structured-rays">Structured Rays</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.xrt_struct_apply"><code class="docutils literal notranslate"><span class="pre">xrt_struct_apply()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.xrt_struct_adjoint"><code class="docutils literal notranslate"><span class="pre">xrt_struct_adjoint()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.struct_rays"><code class="docutils literal notranslate"><span class="pre">struct_rays()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.parallel_beam"><code class="docutils literal notranslate"><span class="pre">parallel_beam()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.cone_beam"><code class="docutils literal notranslate"><span class="pre">cone_beam()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#weights-along-rays">Weights Along Rays</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.TOFSpec"><code class="docutils literal notranslate"><span class="pre">TOFSpec</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.PolynomialWeightSpec"><code class="docutils literal notranslate"><span class="pre">PolynomialWeightSpec</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.TabulatedWeightSpec"><code class="docutils literal notranslate"><span class="pre">TabulatedWeightSpec</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#reconstruction">Reconstruction</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.cg"><code class="docutils literal notranslate"><span class="pre">cg()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.gd"><code class="docutils literal notranslate"><span class="pre">gd()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.fbp"><code class="docutils literal notranslate"><span class="pre">fbp()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.fdk"><code class="docutils literal notranslate"><span class="pre">fdk()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#pytorch">PyTorch</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.torch.xrt_torch"><code class="docutils literal notranslate"><span class="pre">xrt_torch()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.torch.XRTProjector"><code class="docutils literal notranslate"><span class="pre">XRTProjector</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#interoperability">Interoperability</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.from_astra"><code class="docutils literal notranslate"><span class="pre">from_astra()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.interop.vol_astra_to_xtk"><code class="docutils literal notranslate"><span class="pre">vol_astra_to_xtk()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.interop.vol_xtk_to_astra"><code class="docutils literal notranslate"><span class="pre">vol_xtk_to_astra()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.asarray"><code class="docutils literal notranslate"><span class="pre">asarray()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#helpers">Helpers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.UniformSpec"><code class="docutils literal notranslate"><span class="pre">UniformSpec</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xrt_toolkit.UniformSpec.__init__"><code class="docutils literal notranslate"><span class="pre">UniformSpec.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xrt_toolkit.UniformSpec.centered"><code class="docutils literal notranslate"><span class="pre">UniformSpec.centered()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.util.DetectorSpec"><code class="docutils literal notranslate"><span class="pre">DetectorSpec</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xrt_toolkit.util.DetectorSpec.__init__"><code class="docutils literal notranslate"><span class="pre">DetectorSpec.__init__()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#diagnostics">Diagnostics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.plot_rays"><code class="docutils literal notranslate"><span class="pre">plot_rays()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xrt_toolkit.plot_2d_basis"><code class="docutils literal notranslate"><span class="pre">plot_2d_basis()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">References</a></li>
+</ul>
+
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="index.html"
+                          title="previous chapter">XRT Toolkit</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="references.html"
+                          title="next chapter">References</a></p>
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="references.html" title="References"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="XRT Toolkit"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">API Reference</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>

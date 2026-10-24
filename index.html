@@ -1,0 +1,123 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>XRT Toolkit &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="_static/documentation_options.js?v=1c57b938"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script>window.MathJax = {"tex": {"macros": {"bbA": "{\\bf{A}}", "bbb": "{\\bf{b}}", "bbe": "{\\bf{e}}", "bbE": "{\\bf{E}}", "bbH": "{\\bf{H}}", "bbI": "{\\bf{I}}", "bbm": "{\\bf{m}}", "bbn": "{\\bf{n}}", "bbq": "{\\bf{q}}", "bbQ": "{\\bf{Q}}", "bbt": "{\\bf{t}}", "bbu": "{\\bf{u}}", "bbx": "{\\bf{x}}", "bbDelta": "{\\boldsymbol{\\Delta}}", "bbZero": "{\\bf{0}}", "bR": "{\\mathbb{R}}", "discreteRange": ["\\lbrack\\!\\lbrack #1 \\rbrack\\!\\rbrack", 1], "diag": "\\operatorname*{diag}", "xrt": "\\mathcal{P}"}}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API Reference" href="api.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="api.html" title="API Reference"
+             accesskey="N">next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">XRT Toolkit</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="xrt-toolkit">
+<h1>XRT Toolkit<a class="headerlink" href="#xrt-toolkit" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<p><a class="reference external" href="https://github.com/SepandKashani/xrt_toolkit"><img alt="GitHub repository" src="https://img.shields.io/badge/GitHub-Repo-black?logo=github" /></a> <a class="reference external" href="https://SepandKashani.github.io/xrt_toolkit/"><img alt="Documentation" src="https://img.shields.io/badge/Docs-GitHub%20Pages-blue?logo=github" /></a></p>
+<p>XRT Toolkit (XTK) is a collection of utilities to compute X-Ray Transforms.</p>
+<section id="rationale">
+<h2>Rationale<a class="headerlink" href="#rationale" title="Link to this heading">¶</a></h2>
+<p>Tomography measures line integrals of a function <span class="math notranslate nohighlight">\(f: \bR^{D} \to \bR\)</span>, <span class="math notranslate nohighlight">\(D \in \{2, 3\}\)</span>:</p>
+<div class="math notranslate nohighlight" id="equation-xrt">
+<span class="eqno">(1)<a class="headerlink" href="#equation-xrt" title="Link to this equation">¶</a></span>\[\xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) \, d\alpha,\]</div>
+<p>along rays with anchors <span class="math notranslate nohighlight">\(\bbt \in \bR^{D}\)</span> and unit directions <span class="math notranslate nohighlight">\(\bbn \in \bR^{D}\)</span>.
+Expanding <span class="math notranslate nohighlight">\(f\)</span> in shifts of a basis function <span class="math notranslate nohighlight">\(\psi\)</span> on a uniform lattice</p>
+<div class="math notranslate nohighlight">
+\[f(\bbx) = \sum_{\bbq} f_{\bbq} \, \psi(\bbx - \bbx_{\bbq})\]</div>
+<p>makes <a class="reference internal" href="#equation-xrt">(1)</a> linear in the coefficients <span class="math notranslate nohighlight">\(f_{\bbq}\)</span>:</p>
+<div class="math notranslate nohighlight">
+\[\xrt[f](\bbn, \bbt) = \sum_{\bbq} f_{\bbq} \, \xrt[\psi](\bbn, \bbt - \bbx_{\bbq}).\]</div>
+<p>XTK evaluates these sums along arbitrary rays, exactly, for voxels <span class="bibtex-citation" id="id1">[<a class="reference internal" href="references.html#id3" title="John Amanatides and Andrew Woo. A fast voxel traversal algorithm for ray tracing. In Eurographics, volume 87, 3–10. 1987.">1</a>, <a class="reference internal" href="references.html#id2" title="Robert L Siddon. Fast calculation of the exact radiological path for a three-dimensional CT array. Medical Physics, 12(2):252–255, 1985.">7</a>]</span> and for higher-order box splines and B-splines <span class="bibtex-citation" id="id2">[<a class="reference internal" href="references.html#id4" title="Alireza Entezari, Masih Nilchian, and Michael Unser. A box spline calculus for the discretization of computed tomography reconstruction problems. IEEE Transactions on Medical Imaging, 31(8):1532–1541, 2012.">2</a>, <a class="reference internal" href="references.html#id6" title="Youssef Haouchat, Sepand Kashani, Aleix Boquet-Pujadas, Philippe Thévenaz, and Michael Unser. SplineSplat: 3D ray tracing for higher-quality tomography. arXiv preprint, 2026.">4</a>, <a class="reference internal" href="references.html#id5" title="Youssef Haouchat, Sepand Kashani, Philippe Thévenaz, and Michael Unser. Generalized ray tracing with basis functions for tomographic projections. IEEE Transactions on Computational Imaging, 11:1294–1305, 2025.">5</a>]</span>.
+It computes, on CPU and GPU via Dr.Jit <span class="bibtex-citation" id="id3">[<a class="reference internal" href="references.html#id8" title="Wenzel Jakob, Sébastien Speierer, Nicolas Roussel, and Delio Vicini. Dr.Jit: a just-in-time compiler for differentiable rendering. ACM Transactions on Graphics, 41(4):124, 2022.">6</a>]</span>:</p>
+<ul class="simple">
+<li><p>the projections and their adjoint;</p></li>
+<li><p>their gradients with respect to the rays, for geometry calibration <span class="bibtex-citation" id="id4">[<a class="reference internal" href="references.html#id7" title="Youssef Haouchat, Aleix Boquet-Pujadas, Sepand Kashani, Philippe Thévenaz, and Michael Unser. Geometry calibration in tomography with a differentiable ray-based model. arXiv preprint arXiv:2606.21405, 2026.">3</a>]</span>.</p></li>
+</ul>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="#">Table of Contents</a></h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">References</a></li>
+</ul>
+
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="api.html"
+                          title="next chapter">API Reference</a></p>
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="api.html" title="API Reference"
+             >next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">XRT Toolkit</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,401 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>xrt_toolkit.drjit.struct_xrt &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="../../../_static/documentation_options.js?v=1c57b938"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.drjit.struct_xrt</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for xrt_toolkit.drjit.struct_xrt</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">typ</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">drjit</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dr</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">xrt_toolkit.util</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xrtu</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.ray_xrt</span><span class="w"> </span><span class="kn">import</span> <span class="n">xrt_adjoint</span><span class="p">,</span> <span class="n">xrt_apply</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.weight</span><span class="w"> </span><span class="kn">import</span> <span class="n">WeightT</span>
+
+<span class="n">ArrayNNfT</span> <span class="o">=</span> <span class="n">typ</span><span class="o">.</span><span class="n">TypeVar</span><span class="p">(</span><span class="s2">"ArrayNNfT"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">dr</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">)</span>
+<span class="n">ArrayNfT</span> <span class="o">=</span> <span class="n">typ</span><span class="o">.</span><span class="n">TypeVar</span><span class="p">(</span><span class="s2">"ArrayNfT"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">dr</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">)</span>
+<span class="n">FloatT</span> <span class="o">=</span> <span class="n">typ</span><span class="o">.</span><span class="n">TypeVar</span><span class="p">(</span><span class="s2">"FloatT"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">dr</span><span class="o">.</span><span class="n">AnyArray</span><span class="p">)</span>
+<span class="n">RaySpecT</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ArrayNNfT</span><span class="p">,</span> <span class="n">ArrayNNfT</span><span class="p">,</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">UniformSpec</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="xrt_struct_apply">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.xrt_struct_apply">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">xrt_struct_apply</span><span class="p">(</span>
+    <span class="n">ray_spec</span><span class="p">:</span> <span class="n">RaySpecT</span><span class="p">,</span>
+    <span class="n">knot_spec</span><span class="p">:</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">UniformSpec</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">FloatT</span><span class="p">,</span>
+    <span class="n">buffer</span><span class="p">:</span> <span class="n">FloatT</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">weight</span><span class="p">:</span> <span class="n">WeightT</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FloatT</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Compute 2D/3D structured projections.</span>
+
+<span class="sd">    Let :math:`f: \bR^{D} \to \bR` such that</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">       f(\bbx)</span>
+<span class="sd">       =</span>
+<span class="sd">       \sum_{\bbq \in \discreteRange{\bbZero, \bbQ-1}}</span>
+<span class="sd">       f_{\bbq} \psi(\bbx - \bbx_{\bbq}),</span>
+
+<span class="sd">    with</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">       f_{\bbq} \in \bR,</span>
+<span class="sd">       \qquad</span>
+<span class="sd">       \bbx_{\bbq} = \bbx_{0} + \bbq \odot \bbDelta,</span>
+<span class="sd">       \qquad</span>
+<span class="sd">       \bbx_{0} \in \bR^{D},</span>
+<span class="sd">       \quad</span>
+<span class="sd">       \bbDelta \in \bR_{+}^{D},</span>
+
+<span class="sd">    and :math:`\psi` a box spline with direction vectors</span>
+<span class="sd">    :math:`\bbE = [\bbe_{1}, \ldots, \bbe_{N}] \in \bR^{D \times N}`.</span>
+
+<span class="sd">    Then ``xrt_struct_apply()`` computes samples of</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">       \xrt[f](\bbn, \bbt) = \int_{\bR} f(\bbt + \alpha \bbn) d\alpha</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    ray_spec: tuple[ArrayNNfT, ArrayNNfT, UniformSpec]</span>
+<span class="sd">        (L,) implicit ray descriptors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}`.</span>
+
+<span class="sd">        Expected arguments are:</span>
+
+<span class="sd">        * ray_t_spec: ArrayNNfT</span>
+<span class="sd">          (N_proj, D, D) homogeneous transforms :math:`\bbH_{t} = [\bbA_{t} \in \bR^{D \times (D-1)}, \bbb_{t} \in \bR^{D}]`.</span>
+<span class="sd">        * ray_n_spec: ArrayNNfT</span>
+<span class="sd">          (N_proj, D, D) homogeneous transforms :math:`\bbH_{n} = [\bbA_{n} \in \bR^{D \times (D-1)}, \bbb_{n} \in \bR^{D}]`.</span>
+<span class="sd">        * ray_u_spec: UniformSpec</span>
+<span class="sd">          D-dim uniform mesh.</span>
+
+<span class="sd">        Let :math:`\bbu \in \bR^{D}` be a point on the mesh specified by `ray_u_spec`.</span>
+<span class="sd">        Then `ray_spec` encodes rays of the form</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">           \bbt(\bbu) = \bbH_{t} \bbu,</span>
+<span class="sd">           \bbn(\bbu) = \bbH_{n} \bbu.</span>
+
+<span class="sd">        `ray_spec` encodes ``L = N_proj * prod(ray_u_spec.num)`` projections.</span>
+<span class="sd">    knot_spec: UniformSpec</span>
+<span class="sd">        Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.</span>
+<span class="sd">    order: 0 | 1 | 2</span>
+<span class="sd">        Data interpolation order.</span>
+
+<span class="sd">        This parameter sets which :math:`\psi` is used to interpolate data values:</span>
+
+<span class="sd">        * order = 0 (2D, 3D):</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">             \bbE = \diag(\bbDelta)</span>
+
+<span class="sd">        * order = 1 (2D):</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">             \bbE</span>
+<span class="sd">             =</span>
+<span class="sd">             \begin{bmatrix}</span>
+<span class="sd">                \Delta_{1} &amp; 0 &amp; \Delta_{1} \\</span>
+<span class="sd">                0 &amp; \Delta_{2} &amp; \Delta_{2}</span>
+<span class="sd">             \end{bmatrix}</span>
+
+<span class="sd">        * order = 2 (2D):</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">             \bbE</span>
+<span class="sd">             =</span>
+<span class="sd">             \begin{bmatrix}</span>
+<span class="sd">                \Delta_{1} &amp; 0 &amp; \Delta_{1} &amp; \Delta_{1} \\</span>
+<span class="sd">                0 &amp; \Delta_{2} &amp; \Delta_{2} &amp; -\Delta_{2}</span>
+<span class="sd">             \end{bmatrix}</span>
+
+<span class="sd">        * order = 1, 2 (3D): tensor-product B-splines (trilinear, triquadratic)</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">             \psi(\bbx)</span>
+<span class="sd">             =</span>
+<span class="sd">             \beta^{k}(x_{1} / \Delta_{1})</span>
+<span class="sd">             \beta^{k}(x_{2} / \Delta_{2})</span>
+<span class="sd">             \beta^{k}(x_{3} / \Delta_{3}),</span>
+<span class="sd">             \quad</span>
+<span class="sd">             \beta^{k} = \mathbb{1}_{[-1/2, 1/2]}^{\ast (k+1)},</span>
+<span class="sd">             \quad</span>
+<span class="sd">             k = \text{order}</span>
+
+<span class="sd">        The support of :math:`\psi` and its projections can be viewed using :py:func:`~xrt_toolkit.plot_2d_basis`.</span>
+
+<span class="sd">    data: FloatT</span>
+<span class="sd">        (Q1,...,QD) flattened C-ordered volume weights :math:`f_{\bbq} \in \bR`.</span>
+<span class="sd">    buffer: FloatT</span>
+<span class="sd">        (L,) buffer in which to accumulate projections.</span>
+<span class="sd">        The ``(N_proj, *ray_u_spec.num)`` mesh-points are serialized in C-order.</span>
+<span class="sd">    weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec</span>
+<span class="sd">        Weight along each ray (see :py:func:`~xrt_toolkit.xrt_apply`), per ray in the order of the</span>
+<span class="sd">        projections. Arc lengths are measured from the anchors of :py:func:`struct_rays`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    proj: FloatT</span>
+<span class="sd">        (L,) projections :math:`\xrt[f] \in \bR`.</span>
+<span class="sd">    """</span>
+    <span class="n">ray_t_spec</span><span class="p">,</span> <span class="n">ray_n_spec</span><span class="p">,</span> <span class="n">ray_u_spec</span> <span class="o">=</span> <span class="n">ray_spec</span>
+
+    <span class="n">ArrayNNf</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">)</span>
+    <span class="n">ArrayNf</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">value_t</span><span class="p">(</span><span class="n">ArrayNNf</span><span class="p">)</span>
+    <span class="n">Float</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">value_t</span><span class="p">(</span><span class="n">ArrayNf</span><span class="p">)</span>
+
+    <span class="c1"># type checking ---------------------------------------</span>
+    <span class="n">D</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">size_v</span><span class="p">(</span><span class="n">ArrayNf</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">ray_t_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">D</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">ray_n_spec</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ArrayNNf</span>
+    <span class="k">assert</span> <span class="n">ray_u_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="n">D</span>
+
+    <span class="k">assert</span> <span class="n">knot_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="n">D</span>
+    <span class="k">assert</span> <span class="n">order</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Float</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="n">math</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">knot_spec</span><span class="o">.</span><span class="n">num</span><span class="p">)</span>
+
+    <span class="k">assert</span> <span class="p">(</span><span class="n">N_proj</span> <span class="o">:=</span> <span class="n">ray_t_spec</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">==</span> <span class="n">ray_n_spec</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">L_proj</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">ray_u_spec</span><span class="o">.</span><span class="n">num</span><span class="p">)</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">N_proj</span> <span class="o">*</span> <span class="n">L_proj</span>
+    <span class="k">if</span> <span class="n">buffer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">L</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">buffer</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Float</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">buffer</span><span class="p">)</span> <span class="o">==</span> <span class="n">L</span>
+    <span class="c1"># -----------------------------------------------------</span>
+
+    <span class="k">return</span> <span class="n">xrt_apply</span><span class="p">(</span><span class="n">struct_rays</span><span class="p">(</span><span class="n">ray_spec</span><span class="p">),</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">buffer</span><span class="p">,</span> <span class="n">weight</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="xrt_struct_adjoint">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.xrt_struct_adjoint">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">xrt_struct_adjoint</span><span class="p">(</span>
+    <span class="n">ray_spec</span><span class="p">:</span> <span class="n">RaySpecT</span><span class="p">,</span>
+    <span class="n">knot_spec</span><span class="p">:</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">UniformSpec</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">FloatT</span><span class="p">,</span>
+    <span class="n">buffer</span><span class="p">:</span> <span class="n">FloatT</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">weight</span><span class="p">:</span> <span class="n">WeightT</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FloatT</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Compute 2D/3D structured back-projections.</span>
+
+<span class="sd">    Adjoint of ``xrt_struct_apply()``: maps projection weights to volume expansion coefficients.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    ray_spec: tuple[ArrayNNfT, ArrayNNfT, UniformSpec]</span>
+<span class="sd">        (L,) implicit ray descriptors :math:`\bbt \in \bR^{D}` and directions :math:`\bbn \in \bR^{D}`.</span>
+
+<span class="sd">        Expected arguments are:</span>
+
+<span class="sd">        * ray_t_spec: ArrayNNfT</span>
+<span class="sd">          (N_proj, D, D) homogeneous transforms :math:`\bbH_{t} = [\bbA_{t} \in \bR^{D \times (D-1)}, \bbb_{t} \in \bR^{D}]`.</span>
+<span class="sd">        * ray_n_spec: ArrayNNfT</span>
+<span class="sd">          (N_proj, D, D) homogeneous transforms :math:`\bbH_{n} = [\bbA_{n} \in \bR^{D \times (D-1)}, \bbb_{n} \in \bR^{D}]`.</span>
+<span class="sd">        * ray_u_spec: UniformSpec</span>
+<span class="sd">          D-dim uniform mesh.</span>
+
+<span class="sd">        Let :math:`\bbu \in \bR^{D}` be a point on the mesh specified by `ray_u_spec`.</span>
+<span class="sd">        Then `ray_spec` encodes rays of the form</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">           \bbt(\bbu) = \bbH_{t} \bbu,</span>
+<span class="sd">           \bbn(\bbu) = \bbH_{n} \bbu.</span>
+
+<span class="sd">        `ray_spec` encodes ``L = N_proj * prod(ray_u_spec.num)`` projections.</span>
+<span class="sd">    knot_spec: UniformSpec</span>
+<span class="sd">        Volume properties :math:`(\bbx_{0}, \bbDelta, \bbQ)`.</span>
+<span class="sd">    order: 0 | 1 | 2</span>
+<span class="sd">        Data interpolation order.</span>
+
+<span class="sd">        This parameter sets which :math:`\psi` is used to interpolate data values.</span>
+<span class="sd">        The support of :math:`\psi` and its projections can be viewed using :py:func:`~xrt_toolkit.plot_2d_basis`.</span>
+<span class="sd">    data: FloatT</span>
+<span class="sd">        (L,) projections :math:`g_{l} \in \bR`.</span>
+<span class="sd">        The ``(N_proj, *ray_u_spec.num)`` mesh-points are serialized in C-order.</span>
+<span class="sd">    buffer: FloatT</span>
+<span class="sd">        (Q1,...,QD) flattened buffer in which to accumulate back-projected weights :math:`f_{\bbq} \in \bR`.</span>
+<span class="sd">    weight: TOFSpec | PolynomialWeightSpec | TabulatedWeightSpec</span>
+<span class="sd">        Weight along each ray. (See :py:func:`xrt_struct_apply`.)</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    b_proj: FloatT</span>
+<span class="sd">        (Q1,...,QD) flattened C-ordered back-projected weights :math:`f_{\bbq} \in \bR`.</span>
+<span class="sd">    """</span>
+    <span class="n">ray_t_spec</span><span class="p">,</span> <span class="n">ray_n_spec</span><span class="p">,</span> <span class="n">ray_u_spec</span> <span class="o">=</span> <span class="n">ray_spec</span>
+
+    <span class="n">ArrayNNf</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">)</span>
+    <span class="n">ArrayNf</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">value_t</span><span class="p">(</span><span class="n">ArrayNNf</span><span class="p">)</span>
+    <span class="n">Float</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">value_t</span><span class="p">(</span><span class="n">ArrayNf</span><span class="p">)</span>
+
+    <span class="c1"># type checking ---------------------------------------</span>
+    <span class="n">D</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">size_v</span><span class="p">(</span><span class="n">ArrayNf</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">ray_t_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">D</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">ray_n_spec</span><span class="p">)</span> <span class="ow">is</span> <span class="n">ArrayNNf</span>
+    <span class="k">assert</span> <span class="n">ray_u_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="n">D</span>
+
+    <span class="k">assert</span> <span class="n">knot_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="n">D</span>
+    <span class="k">assert</span> <span class="n">order</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">assert</span> <span class="p">(</span><span class="n">N_proj</span> <span class="o">:=</span> <span class="n">ray_t_spec</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">==</span> <span class="n">ray_n_spec</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">L_proj</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">ray_u_spec</span><span class="o">.</span><span class="n">num</span><span class="p">)</span>
+    <span class="n">L</span> <span class="o">=</span> <span class="n">N_proj</span> <span class="o">*</span> <span class="n">L_proj</span>
+    <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Float</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="n">L</span>
+
+    <span class="k">if</span> <span class="n">buffer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">knot_spec</span><span class="o">.</span><span class="n">num</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="nb">type</span><span class="p">(</span><span class="n">buffer</span><span class="p">)</span> <span class="ow">is</span> <span class="n">Float</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">buffer</span><span class="p">)</span> <span class="o">==</span> <span class="n">math</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">knot_spec</span><span class="o">.</span><span class="n">num</span><span class="p">)</span>
+    <span class="c1"># -----------------------------------------------------</span>
+
+    <span class="k">return</span> <span class="n">xrt_adjoint</span><span class="p">(</span><span class="n">struct_rays</span><span class="p">(</span><span class="n">ray_spec</span><span class="p">),</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">buffer</span><span class="p">,</span> <span class="n">weight</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="struct_rays">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.struct_rays">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">struct_rays</span><span class="p">(</span><span class="n">ray_spec</span><span class="p">:</span> <span class="n">RaySpecT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ArrayNfT</span><span class="p">,</span> <span class="n">ArrayNfT</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Individual rays of a structured geometry.</span>
+
+<span class="sd">    Returns one ray (anchor :math:`\bbt`, direction :math:`\bbn`) per (projection, detector cell)</span>
+<span class="sd">    of a geometry from :py:func:`~xrt_toolkit.parallel_beam` or :py:func:`~xrt_toolkit.cone_beam`,</span>
+<span class="sd">    in the order of :py:func:`xrt_struct_apply`'s output. With these rays,</span>
+<span class="sd">    :py:func:`~xrt_toolkit.xrt_apply` / :py:func:`~xrt_toolkit.xrt_adjoint` give the same results</span>
+<span class="sd">    as :py:func:`xrt_struct_apply` / :py:func:`xrt_struct_adjoint`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    ray_spec: tuple[ArrayNNfT, ArrayNNfT, UniformSpec]</span>
+<span class="sd">        Structured geometry. (See :py:func:`xrt_struct_apply`.)</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    ray_spec: tuple[ArrayNfT, ArrayNfT]</span>
+<span class="sd">        (L,) ray anchors :math:`\bbt` and directions :math:`\bbn`, ``L = N_proj * prod(ray_u_spec.num)``,</span>
+<span class="sd">        projection-major.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    The rays are computed lazily: used directly in a projector, they are evaluated inside its kernel</span>
+<span class="sd">    and never stored.</span>
+<span class="sd">    """</span>
+    <span class="n">ray_t_spec</span><span class="p">,</span> <span class="n">ray_n_spec</span><span class="p">,</span> <span class="n">ray_u_spec</span> <span class="o">=</span> <span class="n">ray_spec</span>
+
+    <span class="n">ArrayNNf</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">)</span>
+    <span class="n">ArrayNf</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">value_t</span><span class="p">(</span><span class="n">ArrayNNf</span><span class="p">)</span>
+    <span class="n">Float</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">value_t</span><span class="p">(</span><span class="n">ArrayNf</span><span class="p">)</span>
+    <span class="n">UInt</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">value_t</span><span class="p">(</span><span class="n">dr</span><span class="o">.</span><span class="n">uint32_array_t</span><span class="p">(</span><span class="n">ArrayNf</span><span class="p">))</span>
+
+    <span class="n">u</span> <span class="o">=</span> <span class="p">[</span><span class="n">start</span> <span class="o">+</span> <span class="n">step</span> <span class="o">*</span> <span class="n">dr</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span> <span class="k">for</span> <span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span> <span class="ow">in</span> <span class="n">ray_u_spec</span><span class="p">]</span>
+    <span class="n">uu</span> <span class="o">=</span> <span class="n">ArrayNf</span><span class="p">(</span><span class="o">*</span><span class="n">dr</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="o">*</span><span class="n">u</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">"ij"</span><span class="p">))</span>
+
+    <span class="n">N_proj</span> <span class="o">=</span> <span class="n">ray_t_spec</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">L_proj</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">ray_u_spec</span><span class="o">.</span><span class="n">num</span><span class="p">)</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">UInt</span><span class="p">,</span> <span class="n">N_proj</span> <span class="o">*</span> <span class="n">L_proj</span><span class="p">)</span>
+    <span class="n">i</span><span class="p">,</span> <span class="n">j</span> <span class="o">=</span> <span class="n">index</span> <span class="o">//</span> <span class="n">L_proj</span><span class="p">,</span> <span class="n">index</span> <span class="o">%</span> <span class="n">L_proj</span>  <span class="c1"># ray (projection i, detector cell j)</span>
+    <span class="n">uu</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">ArrayNf</span><span class="p">,</span> <span class="n">uu</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span>
+    <span class="n">ray_t</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">ArrayNNf</span><span class="p">,</span> <span class="n">ray_t_spec</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="o">@</span> <span class="n">uu</span>
+    <span class="n">ray_n</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">ArrayNNf</span><span class="p">,</span> <span class="n">ray_n_spec</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="o">@</span> <span class="n">uu</span>
+    <span class="k">return</span> <span class="n">ray_t</span><span class="p">,</span> <span class="n">ray_n</span></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../../../index.html">Table of Contents</a></h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.drjit.struct_xrt</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>

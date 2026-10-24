@@ -1,0 +1,244 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>xrt_toolkit.util.mesh &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="../../../_static/documentation_options.js?v=1c57b938"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.util.mesh</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for xrt_toolkit.util.mesh</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">cabc</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.misc</span><span class="w"> </span><span class="kn">import</span> <span class="n">broadcast_seq</span>
+
+
+<div class="viewcode-block" id="UniformSpec">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.UniformSpec">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UniformSpec</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Multi-dimensional uniform mesh specifier.</span>
+
+<span class="sd">    Defines points :math:`\bbx_{m} \in \bR^{D}` where each point lies on the</span>
+<span class="sd">    regular lattice</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">       \bbx_{\bbm} = \bbx_{0} + \Delta_{\bbx} \odot \bbm,</span>
+<span class="sd">       \qquad</span>
+<span class="sd">       [\bbm]_{d} \in \{0,\ldots,M_{d}-1\}</span>
+
+<span class="sd">    """</span>
+
+    <span class="n">start</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
+    <span class="n">step</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
+    <span class="n">num</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+
+<div class="viewcode-block" id="UniformSpec.__init__">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.UniformSpec.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">num</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">        Scalars are broadcast to all dimensions.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        start: tuple[float]</span>
+<span class="sd">            :math:`\bbx_{0} \in \bR^{D}`</span>
+<span class="sd">        step: tuple[float]</span>
+<span class="sd">            :math:`\Delta_{\bbx} \in \bR_{+}^{D}`</span>
+<span class="sd">        num: tuple[int]</span>
+<span class="sd">            (M1,...,MD) lattice size</span>
+<span class="sd">        """</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+
+        <span class="n">step</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">step</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">step</span><span class="p">)</span>
+
+        <span class="n">num</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">n</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">num</span><span class="p">)</span>
+
+        <span class="n">D</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span> <span class="p">[</span><span class="n">start</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">num</span><span class="p">]))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">D</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">step</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">step</span><span class="p">,</span> <span class="n">D</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">D</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ndim</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">D</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">D</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cabc</span><span class="o">.</span><span class="n">Iterator</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">[</span><span class="n">d</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">step</span><span class="p">[</span><span class="n">d</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">num</span><span class="p">[</span><span class="n">d</span><span class="p">])</span>
+
+<div class="viewcode-block" id="UniformSpec.centered">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.UniformSpec.centered">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">centered</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"UniformSpec"</span><span class="p">:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">        Initialize a UniformSpec centered at the origin.</span>
+
+<span class="sd">        Scalars are broadcast to all dimensions.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        step: tuple[float]</span>
+<span class="sd">            :math:`\Delta_{\bbx} \in \bR_{+}^{D}`</span>
+<span class="sd">        num: tuple[int]</span>
+<span class="sd">            (M1,...,MD) lattice size</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        u_spec: UniformSpec</span>
+<span class="sd">        """</span>
+        <span class="n">offset_spec</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="n">step</span><span class="p">,</span> <span class="n">num</span><span class="o">=</span><span class="n">num</span><span class="p">)</span>
+
+        <span class="n">ll</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+            <span class="o">-</span><span class="n">step</span> <span class="o">*</span> <span class="p">(</span><span class="n">num</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+            <span class="k">for</span> <span class="p">(</span><span class="n">step</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">offset_spec</span><span class="o">.</span><span class="n">step</span><span class="p">,</span> <span class="n">offset_spec</span><span class="o">.</span><span class="n">num</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">u_spec</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="n">ll</span><span class="p">,</span>
+            <span class="n">step</span><span class="o">=</span><span class="n">offset_spec</span><span class="o">.</span><span class="n">step</span><span class="p">,</span>
+            <span class="n">num</span><span class="o">=</span><span class="n">offset_spec</span><span class="o">.</span><span class="n">num</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">u_spec</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="DetectorSpec">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.DetectorSpec">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DetectorSpec</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Physical dimensions of a 1D/2D pixelized detector.</span>
+
+<span class="sd">    `DetectorSpec` does not encode the detector's position in space.</span>
+<span class="sd">    """</span>
+
+    <span class="n">size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span>
+    <span class="n">num_cell</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+
+<div class="viewcode-block" id="DetectorSpec.__init__">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.DetectorSpec.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">num_cell</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">        Scalars are broadcast to all dimensions.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        size: tuple[float]</span>
+<span class="sd">            Detector span (unitless) :math:`\in \bR_{+}^{D}`.</span>
+
+<span class="sd">            A 1D size denotes detector width.</span>
+<span class="sd">            A 2D size denotes detector (width, height).</span>
+<span class="sd">        num_cell: tuple[int]</span>
+<span class="sd">            (M1,...,MD) cell count per dimension</span>
+<span class="sd">        """</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">s</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">size</span><span class="p">)</span>
+
+        <span class="n">num_cell</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">num_cell</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">n</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">num_cell</span><span class="p">)</span>
+
+        <span class="n">D</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">len</span><span class="p">,</span> <span class="p">[</span><span class="n">size</span><span class="p">,</span> <span class="n">num_cell</span><span class="p">]))</span>
+        <span class="k">assert</span> <span class="n">D</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">size</span><span class="p">,</span> <span class="n">D</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_cell</span> <span class="o">=</span> <span class="n">broadcast_seq</span><span class="p">(</span><span class="n">num_cell</span><span class="p">,</span> <span class="n">D</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cell_size</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">]:</span>
+        <span class="n">c_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_cell</span><span class="p">[</span><span class="n">d</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">c_size</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ndim</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">D</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">D</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">cabc</span><span class="o">.</span><span class="n">Iterator</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">):</span>
+            <span class="k">yield</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="n">d</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_cell</span><span class="p">[</span><span class="n">d</span><span class="p">])</span></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../../../index.html">Table of Contents</a></h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.util.mesh</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>

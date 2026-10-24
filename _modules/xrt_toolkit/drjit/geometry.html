@@ -1,0 +1,263 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>xrt_toolkit.drjit.geometry &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="../../../_static/documentation_options.js?v=1c57b938"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.drjit.geometry</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for xrt_toolkit.drjit.geometry</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">drjit</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dr</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">xrt_toolkit.util</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xrtu</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.struct_xrt</span><span class="w"> </span><span class="kn">import</span> <span class="n">FloatT</span><span class="p">,</span> <span class="n">RaySpecT</span>
+
+
+<div class="viewcode-block" id="parallel_beam">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.parallel_beam">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">parallel_beam</span><span class="p">(</span>
+    <span class="n">angles</span><span class="p">:</span> <span class="n">FloatT</span><span class="p">,</span>
+    <span class="n">detector_spec</span><span class="p">:</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">DetectorSpec</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RaySpecT</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Create parallel/cylinder-beam structured ray specification.</span>
+
+<span class="sd">    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.xrt_struct_apply` or :py:func:`~xrt_toolkit.xrt_struct_adjoint`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    angles: FloatT</span>
+<span class="sd">        (N_proj,) view angles [rad]: view :math:`\theta` has rays along</span>
+<span class="sd">        :math:`(\cos\theta, \sin\theta)` in the XY plane, and its detector through the origin.</span>
+<span class="sd">    detector_spec: DetectorSpec</span>
+<span class="sd">        1D (width) or 2D (width, height) detector.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    ray_spec: RaySpecT</span>
+<span class="sd">        Implicit ray descriptor encoding `N_proj` parallel/cylinder-beam projections.</span>
+
+<span class="sd">        `ray_spec` encodes ``L = N_proj * prod(detector_spec.num_cell)`` projections.</span>
+<span class="sd">    """</span>
+    <span class="n">Float</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">angles</span><span class="p">)</span>
+    <span class="n">Matrix2</span> <span class="o">=</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">float_matrix_t</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">Matrix3</span> <span class="o">=</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">float_matrix_t</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+
+    <span class="c1"># For simplicity, we build (t_spec, n_spec) for the 3D case, then reduce matrix sizes if in 2D.</span>
+    <span class="c1"># \bbH_{t}(\alpha) = R(a) [[0 0 | 0]</span>
+    <span class="c1">#                          [1 0 | 0]</span>
+    <span class="c1">#                          [0 1 | 0]]</span>
+    <span class="c1"># \bbH_{n}(\alpha) = R(a) [[0 0 | 1]</span>
+    <span class="c1">#                          [0 0 | 0]</span>
+    <span class="c1">#                          [0 0 | 0]]</span>
+    <span class="n">R</span> <span class="o">=</span> <span class="n">Matrix3</span><span class="p">(</span>
+        <span class="o">*</span><span class="p">(</span><span class="n">dr</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="o">-</span><span class="n">dr</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="n">dr</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="n">dr</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">ray_t_spec</span> <span class="o">=</span> <span class="n">R</span> <span class="o">@</span> <span class="n">Matrix3</span><span class="p">(</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">ray_n_spec</span> <span class="o">=</span> <span class="n">R</span> <span class="o">@</span> <span class="n">Matrix3</span><span class="p">(</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="n">D</span> <span class="o">=</span> <span class="n">detector_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">D</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="c1"># Drop (row 2, col 1)</span>
+        <span class="n">select</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">mat3</span><span class="p">:</span> <span class="n">Matrix2</span><span class="p">(</span>
+            <span class="o">*</span><span class="p">(</span><span class="n">mat3</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">mat3</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span>
+            <span class="o">*</span><span class="p">(</span><span class="n">mat3</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">mat3</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span>
+        <span class="p">)</span>
+        <span class="n">ray_t_spec</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">)</span>
+        <span class="n">ray_n_spec</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">ray_n_spec</span><span class="p">)</span>
+
+    <span class="n">ll_center</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="p">(</span><span class="n">cs</span> <span class="o">-</span> <span class="n">s</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">cs</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+            <span class="n">detector_spec</span><span class="o">.</span><span class="n">cell_size</span><span class="p">,</span>
+            <span class="n">detector_spec</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">ray_u_spec</span> <span class="o">=</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">UniformSpec</span><span class="p">(</span>
+        <span class="n">start</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">ll_center</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="n">step</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">detector_spec</span><span class="o">.</span><span class="n">cell_size</span><span class="p">,</span> <span class="mf">1e-16</span><span class="p">),</span>
+        <span class="n">num</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">detector_spec</span><span class="o">.</span><span class="n">num_cell</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="n">Array</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">array_t</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">)</span>
+    <span class="n">ray_spec</span> <span class="o">=</span> <span class="p">(</span><span class="n">Array</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">),</span> <span class="n">Array</span><span class="p">(</span><span class="n">ray_n_spec</span><span class="p">),</span> <span class="n">ray_u_spec</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ray_spec</span></div>
+
+
+
+<div class="viewcode-block" id="cone_beam">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.cone_beam">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">cone_beam</span><span class="p">(</span>
+    <span class="n">sod</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">sdd</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">angles</span><span class="p">:</span> <span class="n">FloatT</span><span class="p">,</span>
+    <span class="n">detector_spec</span><span class="p">:</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">DetectorSpec</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RaySpecT</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Create fan/cone-beam structured ray specification.</span>
+
+<span class="sd">    This is a helper function to create pre-defined projection geometries for :py:func:`~xrt_toolkit.xrt_struct_apply` or :py:func:`~xrt_toolkit.xrt_struct_adjoint`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    sod: float</span>
+<span class="sd">        Source-Object-Distance (XY plane).</span>
+<span class="sd">    sdd: float</span>
+<span class="sd">        Source-Detector-Distance (XY plane).</span>
+<span class="sd">    angles: FloatT</span>
+<span class="sd">        (N_proj,) view angles [rad]: at view :math:`\theta`, the source sits at</span>
+<span class="sd">        :math:`-\text{sod} \, (\cos\theta, \sin\theta)` in the XY plane, and the detector faces it</span>
+<span class="sd">        at distance `sdd`.</span>
+<span class="sd">    detector_spec: DetectorSpec</span>
+<span class="sd">        1D (width) or 2D (width, height) detector.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    ray_spec: RaySpecT</span>
+<span class="sd">        Implicit ray descriptor encoding `N_proj` fan/cone-beam projections.</span>
+
+<span class="sd">        `ray_spec` encodes ``L = N_proj * prod(detector_spec.num_cell)`` projections.</span>
+<span class="sd">    """</span>
+    <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">sod</span> <span class="o">&lt;</span> <span class="n">sdd</span>
+
+    <span class="n">Float</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">angles</span><span class="p">)</span>
+    <span class="n">Matrix2</span> <span class="o">=</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">float_matrix_t</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">Matrix3</span> <span class="o">=</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">float_matrix_t</span><span class="p">(</span><span class="n">Float</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+
+    <span class="c1"># For simplicity, we build (t_spec, n_spec) for the 3D case, then reduce matrix sizes if in 2D.</span>
+    <span class="c1"># \bbH_{t}(\alpha) = R(a) [[0 0 | -sod]</span>
+    <span class="c1">#                          [0 0 |    0]</span>
+    <span class="c1">#                          [0 0 |    0]]</span>
+    <span class="c1"># \bbH_{n}(\alpha) = R(a) [[0 0 | sdd]</span>
+    <span class="c1">#                          [1 0 |   0]</span>
+    <span class="c1">#                          [0 1 |   0]]</span>
+    <span class="n">R</span> <span class="o">=</span> <span class="n">Matrix3</span><span class="p">(</span>
+        <span class="o">*</span><span class="p">(</span><span class="n">dr</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="o">-</span><span class="n">dr</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="n">dr</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="n">dr</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">angles</span><span class="p">),</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">ray_t_spec</span> <span class="o">=</span> <span class="n">R</span> <span class="o">@</span> <span class="n">Matrix3</span><span class="p">(</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">sod</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">ray_n_spec</span> <span class="o">=</span> <span class="n">R</span> <span class="o">@</span> <span class="n">Matrix3</span><span class="p">(</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">sdd</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="o">*</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="n">D</span> <span class="o">=</span> <span class="n">detector_spec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">D</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="c1"># Drop (row 2, col 1)</span>
+        <span class="n">select</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">mat3</span><span class="p">:</span> <span class="n">Matrix2</span><span class="p">(</span>
+            <span class="o">*</span><span class="p">(</span><span class="n">mat3</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">mat3</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span>
+            <span class="o">*</span><span class="p">(</span><span class="n">mat3</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">mat3</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]),</span>
+        <span class="p">)</span>
+        <span class="n">ray_t_spec</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">)</span>
+        <span class="n">ray_n_spec</span> <span class="o">=</span> <span class="n">select</span><span class="p">(</span><span class="n">ray_n_spec</span><span class="p">)</span>
+
+    <span class="n">ll_center</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="p">(</span><span class="n">cs</span> <span class="o">-</span> <span class="n">s</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">cs</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+            <span class="n">detector_spec</span><span class="o">.</span><span class="n">cell_size</span><span class="p">,</span>
+            <span class="n">detector_spec</span><span class="o">.</span><span class="n">size</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">ray_u_spec</span> <span class="o">=</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">UniformSpec</span><span class="p">(</span>
+        <span class="n">start</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">ll_center</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="n">step</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">detector_spec</span><span class="o">.</span><span class="n">cell_size</span><span class="p">,</span> <span class="mf">1e-16</span><span class="p">),</span>
+        <span class="n">num</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">detector_spec</span><span class="o">.</span><span class="n">num_cell</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="n">Array</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">array_t</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">)</span>
+    <span class="n">ray_spec</span> <span class="o">=</span> <span class="p">(</span><span class="n">Array</span><span class="p">(</span><span class="n">ray_t_spec</span><span class="p">),</span> <span class="n">Array</span><span class="p">(</span><span class="n">ray_n_spec</span><span class="p">),</span> <span class="n">ray_u_spec</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ray_spec</span></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../../../index.html">Table of Contents</a></h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.drjit.geometry</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>

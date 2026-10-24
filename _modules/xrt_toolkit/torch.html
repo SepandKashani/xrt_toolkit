@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>xrt_toolkit.torch &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../../_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="../../_static/documentation_options.js?v=1c57b938"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.torch</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for xrt_toolkit.torch</h1><div class="highlight"><pre>
+<span></span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">PyTorch bindings.</span>
+
+<span class="sd">:py:func:`xrt_torch` is :py:func:`~xrt_toolkit.xrt_apply` as a differentiable PyTorch function:</span>
+<span class="sd">the volume and the rays are tensors, and gradients reach all three,</span>
+
+<span class="sd">* the volume, through the exact adjoint :py:func:`~xrt_toolkit.xrt_adjoint`;</span>
+<span class="sd">* the ray anchors and directions, through :py:func:`~xrt_toolkit.xrt_grad`.</span>
+
+<span class="sd">Example: calibrate the rays together with the volume.</span>
+
+<span class="sd">.. code-block:: python</span>
+
+<span class="sd">   import torch, xrt_toolkit as xtk</span>
+<span class="sd">   from xrt_toolkit.torch import xrt_torch</span>
+
+<span class="sd">   x = torch.zeros(math.prod(knot_spec.num), device="cuda", requires_grad=True)</span>
+<span class="sd">   t = torch.nn.Parameter(t0)  # (D, L) ray anchors</span>
+<span class="sd">   n = torch.nn.Parameter(n0)  # (D, L) ray directions</span>
+<span class="sd">   loss = ((xrt_torch(x, t, n, knot_spec, order) - y) ** 2).sum()</span>
+<span class="sd">   loss.backward()  # fills x.grad, t.grad, n.grad</span>
+<span class="sd">"""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">drjit</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dr</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">xrt_toolkit.util</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xrtu</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.drjit.ray_grad</span><span class="w"> </span><span class="kn">import</span> <span class="n">xrt_grad</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.drjit.ray_xrt</span><span class="w"> </span><span class="kn">import</span> <span class="n">xrt_adjoint</span><span class="p">,</span> <span class="n">xrt_apply</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_drjit_types</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">D</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="c1"># (ArrayNf, Float) Dr.Jit types on the tensor's device (CUDA or CPU) and precision</span>
+    <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">is_cuda</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">drjit.cuda</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">backend</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">drjit.llvm</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">backend</span>
+    <span class="n">suffix</span> <span class="o">=</span> <span class="p">{</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">:</span> <span class="s2">""</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">float64</span><span class="p">:</span> <span class="s2">"64"</span><span class="p">}[</span><span class="n">x</span><span class="o">.</span><span class="n">dtype</span><span class="p">]</span>
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"Array</span><span class="si">{</span><span class="n">D</span><span class="si">}</span><span class="s2">f</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">"</span><span class="p">),</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"Float</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rays</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="n">ArrayNf</span><span class="p">,</span> <span class="n">Float</span> <span class="o">=</span> <span class="n">_drjit_types</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="n">ArrayNf</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">Float</span><span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="n">d</span><span class="p">]</span><span class="o">.</span><span class="n">contiguous</span><span class="p">())</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">))])</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_XRT</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">autograd</span><span class="o">.</span><span class="n">Function</span><span class="p">):</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span><span class="p">):</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">Float</span> <span class="o">=</span> <span class="n">_drjit_types</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">xrt_apply</span><span class="p">(</span><span class="n">_rays</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span><span class="p">,</span> <span class="n">Float</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()))</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">save_for_backward</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">knot_spec</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">order</span> <span class="o">=</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span>
+        <span class="k">return</span> <span class="n">y</span><span class="o">.</span><span class="n">torch</span><span class="p">()</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">backward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">grad_y</span><span class="p">):</span>
+        <span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">saved_tensors</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">Float</span> <span class="o">=</span> <span class="n">_drjit_types</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">rays</span> <span class="o">=</span> <span class="n">_rays</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">Float</span><span class="p">(</span><span class="n">grad_y</span><span class="o">.</span><span class="n">contiguous</span><span class="p">())</span>
+
+        <span class="n">need_data</span><span class="p">,</span> <span class="n">need_t</span><span class="p">,</span> <span class="n">need_n</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">needs_input_grad</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">need_data</span><span class="p">:</span>  <span class="c1"># A^T g</span>
+            <span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">xrt_adjoint</span><span class="p">(</span><span class="n">rays</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">knot_spec</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">order</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">need_t</span> <span class="ow">or</span> <span class="n">need_n</span><span class="p">:</span>
+            <span class="c1"># each projection depends only on its own ray: g_l times the ray's gradient</span>
+            <span class="n">g_t</span><span class="p">,</span> <span class="n">g_n</span> <span class="o">=</span> <span class="n">xrt_grad</span><span class="p">(</span>
+                <span class="n">rays</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">knot_spec</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">order</span><span class="p">,</span> <span class="n">Float</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">contiguous</span><span class="p">())</span>
+            <span class="p">)</span>
+            <span class="n">out</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">g_t</span> <span class="o">*</span> <span class="n">g</span><span class="p">)</span> <span class="k">if</span> <span class="n">need_t</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">out</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">g_n</span> <span class="o">*</span> <span class="n">g</span><span class="p">)</span> <span class="k">if</span> <span class="n">need_n</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">dr</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">o</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">out</span> <span class="k">if</span> <span class="n">o</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">])</span>  <span class="c1"># one launch for all of them</span>
+        <span class="n">grad_data</span><span class="p">,</span> <span class="n">grad_t</span><span class="p">,</span> <span class="n">grad_n</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span> <span class="k">if</span> <span class="p">(</span><span class="n">o</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span> <span class="k">else</span> <span class="n">o</span><span class="o">.</span><span class="n">torch</span><span class="p">()</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">out</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">grad_data</span><span class="p">,</span> <span class="n">grad_t</span><span class="p">,</span> <span class="n">grad_n</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="xrt_torch">
+<a class="viewcode-back" href="../../api.html#xrt_toolkit.torch.xrt_torch">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">xrt_torch</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">t</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">n</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">knot_spec</span><span class="p">:</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">UniformSpec</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Projections of a volume along rays, differentiable in all three.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data: torch.Tensor</span>
+<span class="sd">        (Q1*...*QD,) flattened C-ordered volume coefficients.</span>
+<span class="sd">    t, n: torch.Tensor</span>
+<span class="sd">        (D, L) ray anchors and directions, one column per ray, on the same device (CUDA or CPU)</span>
+<span class="sd">        and in the same precision (float32 or float64) as `data`.</span>
+<span class="sd">    knot_spec: UniformSpec</span>
+<span class="sd">        Volume lattice. (See :py:func:`~xrt_toolkit.xrt_apply`.)</span>
+<span class="sd">    order: 0 | 1 | 2</span>
+<span class="sd">        Basis order.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    proj: torch.Tensor</span>
+<span class="sd">        (L,) projections.</span>
+<span class="sd">    """</span>
+    <span class="n">D</span> <span class="o">=</span> <span class="n">knot_spec</span><span class="o">.</span><span class="n">ndim</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">n</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">D</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">knot_spec</span><span class="o">.</span><span class="n">num</span><span class="p">),)</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">t</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">n</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">t</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">n</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_XRT</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="XRTProjector">
+<a class="viewcode-back" href="../../api.html#xrt_toolkit.torch.XRTProjector">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">XRTProjector</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    :py:func:`xrt_torch` as a ``torch.nn.Module``, for a fixed volume lattice and basis order.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">knot_spec</span><span class="p">:</span> <span class="n">xrtu</span><span class="o">.</span><span class="n">UniformSpec</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">knot_spec</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order</span> <span class="o">=</span> <span class="n">knot_spec</span><span class="p">,</span> <span class="n">order</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">xrt_torch</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">knot_spec</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">order</span><span class="p">)</span></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../../index.html">Table of Contents</a></h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../references.html">References</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.torch</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>

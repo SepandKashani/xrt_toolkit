@@ -1,0 +1,131 @@
+
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>xrt_toolkit.util.tof &#8212; XRT Toolkit 0.1.dev111 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/bizstyle.css?v=5283bb3d" />
+    
+    <script src="../../../_static/documentation_options.js?v=1c57b938"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/bizstyle.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <!--[if lt IE 9]>
+    <script src="_static/css3-mediaqueries.js"></script>
+    <![endif]-->
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.util.tof</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for xrt_toolkit.util.tof</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+
+
+<div class="viewcode-block" id="TOFSpec">
+<a class="viewcode-back" href="../../../api.html#xrt_toolkit.TOFSpec">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TOFSpec</span><span class="p">:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
+<span class="sd">    Time-of-flight (TOF) weight along each ray, a Gaussian.</span>
+
+<span class="sd">    As `weight` of :py:func:`~xrt_toolkit.xrt_apply`, it gives</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">       \int_{\bR} f(\bbt + \alpha \hat{\bbn}) \, g_{\sigma}(\alpha - \mu) \, d\alpha,</span>
+<span class="sd">       \qquad</span>
+<span class="sd">       g_{\sigma}(\alpha) = \frac{1}{\sigma \sqrt{2\pi}} \exp\left(-\frac{\alpha^{2}}{2\sigma^{2}}\right),</span>
+
+<span class="sd">    where :math:`\alpha` is the signed arc length from the ray anchor :math:`\bbt` along the unit</span>
+<span class="sd">    direction :math:`\hat{\bbn}`. In positron emission tomography, :math:`\mu` is the most likely</span>
+<span class="sd">    annihilation position along the line of response and :math:`\sigma` the timing resolution of</span>
+<span class="sd">    the scanner, both in the length unit of `knot_spec`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    center: FloatT | float</span>
+<span class="sd">        (L,) TOF centers :math:`\mu`, one per ray, or a scalar shared by all rays.</span>
+<span class="sd">    sigma: FloatT | float</span>
+<span class="sd">        (L,) TOF standard deviations :math:`\sigma &gt; 0`, one per ray, or a scalar shared by all</span>
+<span class="sd">        rays.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    * Order 0 is exact: the window is integrated over each voxel chord.</span>
+<span class="sd">    * 3D orders 1, 2 integrate the window with the basis functions by Gauss quadrature: float32</span>
+<span class="sd">      accurate for :math:`\sigma` of one voxel or more.</span>
+<span class="sd">    * 2D orders 1, 2 weight each basis function by the window at its center. This is an</span>
+<span class="sd">      approximation, with relative error decreasing like 1/:math:`\sigma` (order 1: 1.4% at</span>
+<span class="sd">      :math:`\sigma` = 3 pixels, 0.13% at 30).</span>
+<span class="sd">    * Binned TOF data is modelled by repeating each ray once per TOF bin, with that bin's</span>
+<span class="sd">      `center`.</span>
+<span class="sd">    """</span>
+
+    <span class="n">center</span><span class="p">:</span> <span class="nb">object</span>
+    <span class="n">sigma</span><span class="p">:</span> <span class="nb">object</span></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h3><a href="../../../index.html">Table of Contents</a></h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">XRT Toolkit 0.1.dev111 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">xrt_toolkit.util.tof</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, S. Kashani &lt;sepand@kashani.ch&gt;.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.0.4.
+    </div>
+  </body>
+</html>
