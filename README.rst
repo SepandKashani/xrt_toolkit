@@ -1,9 +1,19 @@
 XRT Toolkit
 ===========
 
-.. image:: https://img.shields.io/badge/License-MIT-yellow.svg
-   :target: https://opensource.org/licenses/MIT
+.. |gh-badge| image:: https://img.shields.io/badge/GitHub-Repo-black?logo=github
+   :alt: GitHub repository
+   :target: https://github.com/SepandKashani/xrt_toolkit
+
+.. |docs-badge| image:: https://img.shields.io/badge/Docs-GitHub%20Pages-blue?logo=github
+   :alt: Documentation
+   :target: https://SepandKashani.github.io/xrt_toolkit/
+
+.. |license-badge| image:: https://img.shields.io/badge/License-MIT-yellow.svg
    :alt: License: MIT
+   :target: https://opensource.org/licenses/MIT
+
+|gh-badge| |docs-badge| |license-badge|
 
 
 XRT Toolkit (XTK) is a collection of utilities to compute X-Ray Transforms.
